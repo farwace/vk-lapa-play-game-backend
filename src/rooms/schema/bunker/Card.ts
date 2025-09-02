@@ -14,6 +14,7 @@ export class Card extends Schema {
   @type("string") maleImageUrl: string = "";
   @type("string") femaleImageUrl: string = "";
   @type(CardCustomData) customData = new CardCustomData();
+  @type("boolean") isRevealed: boolean = false;
 
   constructor(id: string, name: string, type: string, active:boolean = true, maleImageUrl: string = "", femaleImageUrl: string = "", customData: CardCustomData = new CardCustomData()) {
     super();

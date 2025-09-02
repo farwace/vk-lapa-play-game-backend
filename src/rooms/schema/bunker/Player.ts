@@ -1,4 +1,4 @@
-import { Schema, type, ArraySchema } from "@colyseus/schema";
+import { Schema, type, view, ArraySchema } from "@colyseus/schema";
 import { Card } from "./Card";
 import {TUser} from "./types";
 
@@ -11,8 +11,8 @@ export class Player extends Schema {
     @type("boolean") canSpeak: boolean = false;
     @type("boolean") isEliminated: boolean = false;
 
-    @type({ array: Card }) cards = new ArraySchema<Card>();
-    @type(["string"]) revealedCardTypes = new ArraySchema<string>();
+    @view() @type([Card]) cards = new ArraySchema<Card>();
+    @type([Card]) revealedCards = new ArraySchema<Card>();
 
     @type("number") experience: number = 0;
     @type("number") level: number = 0;

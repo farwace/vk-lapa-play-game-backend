@@ -1,4 +1,5 @@
 import {Room, Client} from "@colyseus/core";
+import {StateView} from "@colyseus/schema";
 import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
@@ -9,7 +10,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     maxClients = 12;
     state = new BunkerGameRoomState();
 
-    private turnTimer?: Delayed;
+    private turnTimer: Delayed | null = null;
 
     private allCardTypes = [
         "cardsProfession",
@@ -31,9 +32,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.state.places.set(i.toString(), 0);
         }
 
+        this.updateMetadata();
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
-
 
     }
 
@@ -48,85 +49,87 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     private updateMetadata = () => {
         let availablePlaces = 0;
 
-        for(const [index, playerId] of this.state.places.entries()){
+        for(const [, playerId] of this.state.places){
             if(!playerId){
                 availablePlaces += 1;
             }
         }
 
+        const canJoin = !this.state.isPrivateRoom && availablePlaces > 0 && (this.state.status === RoomStatus.WAITING || this.state.status === RoomStatus.FINISHED);
+
         this.setMetadata({
             availablePlaces: availablePlaces,
             status: this.state.status,
             isPrivate: this.state.isPrivateRoom,
-            canJoin: !this.state.isPrivateRoom && availablePlaces > 0 && [RoomStatus.WAITING, RoomStatus.FINISHED].indexOf(this.state.status) > -1,
+            canJoin: canJoin
         }).then(() => updateLobby(this));
     }
 
     private startTurnTimer(callback?:(args:any)=>void, args?: any) {
-        if (this.turnTimer) {
-            this.turnTimer.clear();
-        }
+        this.turnTimer?.clear();
+        this.turnTimer = null;
+
         this.state.turnTimeRemaining = this.state.turnTimeLimit;
         this.turnTimer = this.clock.setInterval(() => {
             this.state.turnTimeRemaining--;
             if (this.state.turnTimeRemaining <= 0) {
-                this.turnTimer.clear();
-                callback(args);
+                this.turnTimer?.clear();
+                this.turnTimer = null;
+                callback?.(args);
             }
         }, 1000);
     }
 
-    async onJoin(client: Client, options: any, auth: any) {
-        try {
+    async onJoin(client: Client, options: any) {
+        const userData = await ApiService.authenticatePlayer(options.authString || '');
+        if (!userData) throw new Error('Не удалось идентифицировать игрока');
 
-            const userData= await ApiService.authenticatePlayer(options.authString || '');
-            if(!userData){
-                throw new Error('Не удалось идентифицировать игрока');
-            }
+        let isReconnected = false;
 
-            let existingPlayer = this.state.players.get(userData.id.toString());
-            if(!existingPlayer){
-                existingPlayer = new Player(client.sessionId, userData);
-                this.broadcast("playerConnected", userData);
-            }
-            else{
-                this.broadcast("playerReconnected", userData);
-            }
+        let player = this.state.players.get(userData.id.toString());
+        if (!player) {
+            player = new Player(client.sessionId, userData);
+        } else {
+            isReconnected = true;
+            player.sessionId = client.sessionId; // обновим сессию при реконнекте
+        }
 
-
-            // Проверка, если игра не началась - игрок может занять место
-            if (this.state.status == RoomStatus.WAITING) {
-                let hasPlace = false;
-                for(const [index, playerId] of this.state.places.entries()){
-                    if(!playerId && !hasPlace){
-                        this.state.places.set(index, existingPlayer.id);
-                        hasPlace = true;
-                        this.updateMetadata();
-                    }
+        let placed = false;
+        // если игра не началась — пытаемся занять место
+        if (this.state.status === RoomStatus.WAITING) {
+            for (const [index, pid] of this.state.places) {
+                if (!pid) {
+                    this.state.places.set(index, player.id);
+                    placed = true;
+                    break;
                 }
             }
-
-            existingPlayer.isConnected = true;
-
-            if (this.state.disconnectedPlayers.indexOf(existingPlayer.id.toString()) > -1) {
-                delete this.state.disconnectedPlayers[this.state.disconnectedPlayers.indexOf(existingPlayer.id.toString())];
-            }
-
-            // Если это первый игрок, делаем его хостом
-            if (this.clients.length === 1) {
-                this.state.hostId = existingPlayer.id;
-            }
-
-            // Добавляем игрока в состояние
-            this.state.players.set(existingPlayer.id.toString(), existingPlayer);
-
-            this.broadcast('playerJoined', existingPlayer);
-
-        } catch (error) {
-            /** @ts-ignore */
-            console.error(`Ошибка при входе игрока: ${error.message}`);
-            throw error;
         }
+
+        if(!placed){
+            client.send('youAreSpectator');
+        }
+        else{
+            this.updateMetadata();
+        }
+
+        player.isConnected = true;
+
+        const discIdx = this.state.disconnectedPlayers.indexOf(player.id.toString());
+        if (discIdx > -1) this.state.disconnectedPlayers.splice(discIdx, 1);
+
+        // первый игрок становится хостом
+        if (this.clients.length === 0 || this.state.hostId === 0) {
+            this.state.hostId = player.id;
+        }
+
+        client.view = new StateView();
+        client.view.add(player);
+        this.state.players.set(player.id.toString(), player);
+
+        this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
+        this.broadcast('playerJoined', player);
+        //todo: отправка пользователю что он наблюдатель
     }
 
 
@@ -146,47 +149,48 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 return;
             }
         }
-        this.state.hostId = undefined;
+        this.state.hostId = 0;
     }
 
     onLeave(client: Client, consented: boolean) {
 
         const player = this.findPlayerIdByClientSessionId(client.sessionId);
-        if (!player) {
-            console.log(`Клиент ${client.sessionId} вышел, но не был связан с игроком`);
-            return;
-        }
+        if (!player) { return; }
+
         if(this.state.status == RoomStatus.PLAYING) {
             player.isConnected = false;
             this.broadcast("playerDisconnected", { playerId: player.id });
             //todo: выключить микрофон и переключить на следующего
-        }
-        else{
-            if (this.state.hostId == player.id) {
-                this.assignNewHost(player.id);
-            }
+            //todo: проверка на закрытие комнаты так как все вышли
 
-            for (const [index, placePlayerId] of this.state.places.entries()) {
-                if (placePlayerId === player.id) {
-                    this.state.places.set(index, 0);
-                    break;
-                }
-            }
-            this.updateMetadata();
-
-            this.state.players.delete(player.id.toString());
-            this.state.disconnectedPlayers.push(player.id.toString());
-            this.broadcast("playerLeft", { playerId: player.id });
+            return;
         }
+
+        for (const [index, placePlayerId] of this.state.places) {
+            if (placePlayerId === player.id) {
+                this.state.places.set(index, 0);
+                break;
+            }
+        }
+
+        if (this.state.hostId == player.id) {
+            this.assignNewHost(player.id);
+        }
+
+        this.state.players.delete(player.id.toString());
+        this.state.disconnectedPlayers.push(player.id.toString());
+
+        this.updateMetadata();
+        this.broadcast("playerLeft", { playerId: player.id });
+
 
         // todo: Проверяем условия окончания игры
         // this.checkGameEndConditions();
     }
 
     onDispose() {
-        if (this.turnTimer) {
-            this.turnTimer.clear();
-        }
+        this.turnTimer?.clear();
+        this.turnTimer = null;
     }
 
 }

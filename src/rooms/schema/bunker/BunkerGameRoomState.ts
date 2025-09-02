@@ -1,4 +1,4 @@
-import {ArraySchema, Schema, type} from "@colyseus/schema";
+import {ArraySchema, Schema, type, MapSchema} from "@colyseus/schema";
 import {Player} from "./Player";
 import {Scenario} from "./Scenario";
 
@@ -20,15 +20,15 @@ export class BunkerGameRoomState extends Schema {
     @type("string") gameStage: GameStage = GameStage.INTRODUCTION;
 
     @type("boolean") isPrivateRoom: boolean = false;
-    @type("number") hostId: number = undefined;
+    @type("number") hostId: number = 0;
 
     @type("string") currentSpeakerId: string = "";
 
     @type("number") minPlayers: number = 6;
     @type("number") maxPlayers: number = 8;
-    @type({map: "number"}) places: Map<string, number> = new Map<string, number>();
+    @type({map: "number"}) places: MapSchema<number> = new MapSchema<number>();
 
-    @type({map: Player}) players = new Map<string, Player>();
+    @type({map: Player}) players = new MapSchema<Player>();
     @type(["string"]) eliminatedPlayers = new ArraySchema<string>();
     @type(["string"]) disconnectedPlayers = new ArraySchema<string>();
     @type(Scenario) scenario = new Scenario();
