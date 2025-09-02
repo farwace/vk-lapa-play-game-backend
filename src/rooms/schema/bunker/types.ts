@@ -8,6 +8,7 @@ export type TUser = {
     popularityLevel: number;
     isVip: boolean;
     isPremium: boolean;
+    avatar: string
 }
 
 export type TEcosystemResponse<T> = {

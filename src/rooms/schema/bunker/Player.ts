@@ -21,6 +21,7 @@ export class Player extends Schema {
     @type("boolean") isMale: boolean = true;
     @type("boolean") isVip: boolean = false;
     @type("boolean") isPremium: boolean = false;
+    @type("string") avatar: string = '';
 
 
     @type("number") age: number = 0; // возраст для карточки возраста
@@ -37,6 +38,7 @@ export class Player extends Schema {
         this.popularityLevel = p.popularityLevel;
         this.isVip = p.isVip;
         this.isPremium = p.isPremium;
+        this.avatar = p.avatar
     }
 
 }

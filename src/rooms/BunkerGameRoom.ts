@@ -123,9 +123,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.state.hostId = player.id;
         }
 
+
+        this.state.players.set(player.id.toString(), player);
         client.view = new StateView();
         client.view.add(player);
-        this.state.players.set(player.id.toString(), player);
 
         this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
         this.broadcast('playerJoined', player);

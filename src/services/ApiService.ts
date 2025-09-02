@@ -10,23 +10,24 @@ export class ApiService {
     }
 
     async authenticatePlayer(authString: string): Promise<TUser> {
-        // Пока заглушка, которая всех аутентифицирует
-        const res: TEcosystemResponse<TUser> = {
-            data: {
-                id: Math.floor(Math.random() * 1000),
-                name: `Player ${Math.floor(Math.random() * 1000)}`,
-                isMale: Math.random() > 0.5,
-                experience: 10,
-                isPremium: false,
-                isVip: false,
-                level: 0,
-                popularity: 100,
-                popularityLevel: 0
-            },
-            message: '',
-            success: true
+        try{
+            // Пока заглушка, которая всех аутентифицирует
+            const res: AxiosResponse<TEcosystemResponse<TUser>> = await axios.post(`${this.baseUrl}/api/v1.0/bunker/user-info`, {
+                    authString: authString
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.API_SECRET}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+            return res.data.data;
         }
-        return res.data;
+        catch (error: any) {
+            console.log(error);
+            return undefined;
+        }
   }
 
   // Получение случайного сценария с сервера
