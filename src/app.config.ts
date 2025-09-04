@@ -6,6 +6,7 @@ import {playground} from "@colyseus/playground";
  * Import your Room files
  */
 import {BunkerGameRoom} from "./rooms/BunkerGameRoom";
+import {LobbyRoom} from "colyseus";
 
 export default config({
 
@@ -13,6 +14,7 @@ export default config({
         /**
          * Define your room handlers:
          */
+        gameServer.define("lobby", LobbyRoom);
         gameServer.define('bunker_game', BunkerGameRoom, {}).enableRealtimeListing();
 
     },

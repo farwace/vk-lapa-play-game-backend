@@ -26,6 +26,7 @@ export class BunkerGameRoomState extends Schema {
 
     @type("number") minPlayers: number = 6;
     @type("number") maxPlayers: number = 8;
+    @type("number") playersCount: number = 8;
     @type({map: "number"}) places: MapSchema<number> = new MapSchema<number>();
 
     @type({map: Player}) players = new MapSchema<Player>();

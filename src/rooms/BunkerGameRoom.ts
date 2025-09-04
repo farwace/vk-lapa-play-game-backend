@@ -25,17 +25,45 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     async onCreate(options: any) {
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
-        this.state.minPlayers = 6;
-        this.state.maxPlayers = 8;
+        this.state.playersCount = 8;
 
-        for (let i = 0; i < this.state.maxPlayers; i++) {
+        for (let i = 0; i < this.state.playersCount; i++) {
             this.state.places.set(i.toString(), 0);
         }
 
         this.updateMetadata();
+        this.onMessage('changePlace', this.onChangePlaceMessage.bind(this));
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
 
+    }
+
+    private onChangePlaceMessage = (client: Client, payload: string) => {
+        const placeNum = (+payload).toString();
+        const placeValue = this.state.places.get(placeNum);
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять место во время игры');
+            return;
+        }
+
+        if(placeValue != 0){
+            client.send('error', 'Место занято');
+            return;
+        }
+
+        const player = this.findPlayerByClientSessionId(client.sessionId);
+        if(!player){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            if(placedPlayerId == player.id){
+                this.state.places.set(currentPlace, 0);
+            }
+        }
+
+        this.state.places.set(placeNum, player.id);
     }
 
     private loadScenario = async () => {
@@ -134,7 +162,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     }
 
 
-    private findPlayerIdByClientSessionId(sessionId: string): Player | undefined {
+    private findPlayerByClientSessionId(sessionId: string): Player | undefined {
         for(const [playerId, player] of this.state.players.entries()) {
             if(player.sessionId == sessionId){
                 return player;
@@ -155,7 +183,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     onLeave(client: Client, consented: boolean) {
 
-        const player = this.findPlayerIdByClientSessionId(client.sessionId);
+        const player = this.findPlayerByClientSessionId(client.sessionId);
         if (!player) { return; }
 
         if(this.state.status == RoomStatus.PLAYING) {
