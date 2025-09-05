@@ -33,37 +33,11 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         this.updateMetadata();
         this.onMessage('changePlace', this.onChangePlaceMessage.bind(this));
+        this.onMessage('kickPlayer', this.onKickPlayerMessage.bind(this));
+        this.onMessage('setLeaderPlayer', this.onSetLeaderPlayerMessage.bind(this));
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
 
-    }
-
-    private onChangePlaceMessage = (client: Client, payload: string) => {
-        const placeNum = (+payload).toString();
-        const placeValue = this.state.places.get(placeNum);
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя менять место во время игры');
-            return;
-        }
-
-        if(placeValue != 0){
-            client.send('error', 'Место занято');
-            return;
-        }
-
-        const player = this.findPlayerByClientSessionId(client.sessionId);
-        if(!player){
-            client.send('error', 'Не удалось идентифицировать игрока');
-            return;
-        }
-
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(placedPlayerId == player.id){
-                this.state.places.set(currentPlace, 0);
-            }
-        }
-
-        this.state.places.set(placeNum, player.id);
     }
 
     private loadScenario = async () => {
@@ -175,6 +149,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         for(const [playerId, player] of this.state.players.entries()) {
             if(player.id != ignorePlayerId){
                 this.state.hostId = player.id;
+                this.broadcast("leaderChanged", player.id);
                 return;
             }
         }
@@ -220,6 +195,114 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     onDispose() {
         this.turnTimer?.clear();
         this.turnTimer = null;
+    }
+
+
+    private onChangePlaceMessage = (client: Client, payload: string) => {
+        const placeNum = (+payload).toString();
+        const placeValue = this.state.places.get(placeNum);
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять место во время игры');
+            return;
+        }
+
+        if(placeValue != 0){
+            client.send('error', 'Место занято');
+            return;
+        }
+
+        const player = this.findPlayerByClientSessionId(client.sessionId);
+        if(!player){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            if(placedPlayerId == player.id){
+                this.state.places.set(currentPlace, 0);
+            }
+        }
+
+        this.state.places.set(placeNum, player.id);
+    }
+
+    private onKickPlayerMessage = (client: Client, playerId: string) => {
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя исключать игроков во время игры');
+            return;
+        }
+
+        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        if(this.state.hostId != currentPlayer.id){
+            client.send('error', 'Исключать игроков может только лидер комнаты!');
+            return;
+        }
+
+        const player = this.state.players.get(playerId);
+        if(!player || !player?.id){
+            client.send('error', 'Игрок не найден!');
+            return;
+        }
+
+        if(currentPlayer.id == player.id){
+            client.send('error', 'Нельзя исключить самого себя!');
+            return;
+        }
+
+        const playerClient = this.clients.find(c => c.sessionId === player.sessionId);
+        if (!playerClient) {
+            return;
+        }
+
+        try {
+            this.broadcast("playerKicked", {
+                player: player
+            }, {except: playerClient});
+
+            playerClient.send('kicked', 'Вас исключили из комнаты')
+            playerClient.leave(1000, "Kicked by host");
+            this.state.players.delete(playerId);
+
+            client.send('kickSuccess');
+        }
+        catch (error) {}
+
+    }
+    private onSetLeaderPlayerMessage = (client: Client, playerId: string) => {
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять лидера во время игры');
+            return;
+        }
+
+        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        if(this.state.hostId != currentPlayer.id){
+            client.send('error', 'Назначать лидера комнаты может только лидер комнаты!');
+            return;
+        }
+
+        const player = this.state.players.get(playerId);
+        if(!player || !player?.id){
+            client.send('error', 'Игрок не найден!');
+            return;
+        }
+
+        if(currentPlayer.id == player.id){
+            client.send('error', 'Нельзя назначить лидером самого себя!');
+            return;
+        }
+
+        const playerClient = this.clients.find(c => c.sessionId === player.sessionId);
+        if (!playerClient) {
+            return;
+        }
+
+        try {
+            this.state.hostId = player.id;
+            this.broadcast("leaderChanged", player.id);
+            client.send('setLeaderSuccess');
+        }
+        catch (error) {}
+
     }
 
 }
