@@ -259,6 +259,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 player: player
             }, {except: playerClient});
 
+            for(const [currentPlace, placedPlayerId] of this.state.places){
+                if(placedPlayerId == player.id){
+                    this.state.places.set(currentPlace, 0);
+                }
+            }
+
             playerClient.send('kicked', 'Вас исключили из комнаты')
             playerClient.leave(1000, "Kicked by host");
             this.state.players.delete(playerId);
