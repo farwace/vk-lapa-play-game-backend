@@ -263,7 +263,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             client.send('error', 'Минимум ' + this.state.minPlayers + ' игроков');
             return;
         }
-        if(playersCount == this.state.maxPlayers && direction == 'sub'){
+        if(playersCount == this.state.maxPlayers && direction == 'add'){
             client.send('error', 'Максимум ' + this.state.maxPlayers + ' игроков');
             return;
         }
