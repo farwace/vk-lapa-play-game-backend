@@ -44,7 +44,8 @@ export class ApiService {
             scenario.id = res.data.data.id.toString();
             scenario.name = res.data.data.name;
             scenario.description = res.data.data.description;
-            scenario.imageUrl = res.data.data.image_url;
+            scenario.imageUrl = res.data.data.imageUrl;
+            scenario.imageUrl = res.data.data.smallImageUrl;
 
             for (let i of scenario.getAllCardTypes()){
                 if(res.data.data[i]){

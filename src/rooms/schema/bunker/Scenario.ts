@@ -6,6 +6,7 @@ export class Scenario extends Schema {
   @type("string") name: string = "";
   @type("string") description: string = "";
   @type("string") imageUrl: string = "";
+  @type("string") smallImageUrl: string = "";
 
   @type([Card]) cardsProfession = new ArraySchema<Card>();
   @type([Card]) cardsAge = new ArraySchema<Card>();

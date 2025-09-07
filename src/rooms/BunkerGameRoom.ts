@@ -131,7 +131,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         client.view.add(player);
 
         this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
-        this.broadcast('playerJoined', player);
         //todo: отправка пользователю что он наблюдатель
     }
 
@@ -255,10 +254,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
         try {
-            this.broadcast("playerKicked", {
-                player: player
-            }, {except: playerClient});
-
             for(const [currentPlace, placedPlayerId] of this.state.places){
                 if(placedPlayerId == player.id){
                     this.state.places.set(currentPlace, 0);
@@ -269,7 +264,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             playerClient.leave(1000, "Kicked by host");
             this.state.players.delete(playerId);
 
-            client.send('kickSuccess');
+            this.broadcast("playerKicked", {
+                player: player
+            }, {except: playerClient});
         }
         catch (error) {}
 
@@ -305,7 +302,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         try {
             this.state.hostId = player.id;
             this.broadcast("leaderChanged", player.id);
-            client.send('setLeaderSuccess');
         }
         catch (error) {}
 
