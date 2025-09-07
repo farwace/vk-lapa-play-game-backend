@@ -312,7 +312,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             return;
         }
 
-        if((+placeNum) >= this.state.maxPlayers || (+placeNum) < this.state.minPlayers){
+        if((+placeNum) >= this.state.maxPlayers || (+placeNum) < 0){
             client.send('error', 'Нельзя занять это место');
             return;
         }
