@@ -36,6 +36,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('kickPlayer', this.onKickPlayerMessage.bind(this));
         this.onMessage('setLeaderPlayer', this.onSetLeaderPlayerMessage.bind(this));
         this.onMessage('togglePrivateRoom', this.onTogglePrivateMessage.bind(this));
+        this.onMessage('changePlayersCount', this.changePlayersCountMessage.bind(this));
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
 
@@ -197,6 +198,97 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.turnTimer = null;
     }
 
+
+    private replacePlayersPlaces = () => {
+        const currentCount = this.state.playersCount;        // допустимые места: 0..currentCount-1
+        const places = this.state.places;                    // MapSchema<number>
+
+        const candidates: Array<{ index: number; playerId: number }> = [];
+        const freeSeats: number[] = [];
+
+        // 1) Собираем кандидатов (сидят на местах >= currentCount) и свободные места внутри диапазона
+        for (const [key, playerId] of places) {
+            const idx = Number(key);
+
+            if (idx >= currentCount) {
+                if (playerId > 0) candidates.push({ index: idx, playerId });
+            } else {
+                if (playerId === 0) freeSeats.push(idx);
+            }
+        }
+
+        if (candidates.length === 0 && freeSeats.length === 0) {
+            return; // ничего делать не нужно
+        }
+
+        // Приоритет: пересаживаем с меньших "вне-диапазонных" индексов в меньшие свободные места
+        candidates.sort((a, b) => a.index - b.index);  // напр.: 6 перед 7
+        freeSeats.sort((a, b) => a - b);               // напр.: 1 перед 4
+
+        // 2) Пересаживаем сколько поместится
+        const moveCount = Math.min(candidates.length, freeSeats.length);
+        for (let i = 0; i < moveCount; i++) {
+            const { playerId } = candidates[i];
+            const targetSeat = freeSeats[i];
+            places.set(targetSeat.toString(), playerId);
+        }
+
+        // 3) Обнуляем все места вне диапазона (>= currentCount)
+        for (const [key] of places) {
+            const idx = Number(key);
+            if (idx >= currentCount) {
+                places.set(key, 0);
+            }
+        }
+
+    };
+
+    private changePlayersCountMessage = (client: Client, direction: string) => {
+        if(direction != 'add' && direction != 'sub'){
+            return;
+        }
+
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять количество игроков во время игры');
+            return;
+        }
+        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        if(this.state.hostId != currentPlayer.id){
+            client.send('error', 'Менять количество игроков может только лидер комнаты!');
+            return;
+        }
+
+        const playersCount = this.state.playersCount;
+        if(playersCount == this.state.minPlayers && direction == 'sub'){
+            client.send('error', 'Минимум ' + this.state.minPlayers + ' игроков');
+            return;
+        }
+        if(playersCount == this.state.maxPlayers && direction == 'sub'){
+            client.send('error', 'Максимум ' + this.state.maxPlayers + ' игроков');
+            return;
+        }
+
+        let placesCount = 0;
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            if(placedPlayerId > 0){
+                placesCount ++;
+            }
+        }
+
+        if(placesCount == playersCount && direction == 'sub'){
+            client.send('error', 'Места заняты. Исключите игрока чтобы уменьшить количество мест');
+            return;
+        }
+
+        if(direction == 'add'){
+            this.state.playersCount += 1;
+        }
+        else{
+            this.state.playersCount -= 1;
+        }
+        this.updateMetadata();
+        this.replacePlayersPlaces();
+    }
 
     private onTogglePrivateMessage = (client: Client) => {
         if(this.state.status != RoomStatus.WAITING) {
