@@ -35,6 +35,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('changePlace', this.onChangePlaceMessage.bind(this));
         this.onMessage('kickPlayer', this.onKickPlayerMessage.bind(this));
         this.onMessage('setLeaderPlayer', this.onSetLeaderPlayerMessage.bind(this));
+        this.onMessage('togglePrivateRoom', this.onTogglePrivateMessage.bind(this));
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
 
@@ -51,8 +52,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     private updateMetadata = () => {
         let availablePlaces = 0;
 
-        for(const [, playerId] of this.state.places){
-            if(!playerId){
+        for(const [index, playerId] of this.state.places){
+            if(!playerId && (+index < this.state.playersCount)){
                 availablePlaces += 1;
             }
         }
@@ -196,6 +197,20 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.turnTimer = null;
     }
 
+
+    private onTogglePrivateMessage = (client: Client) => {
+        if(this.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять приватность комнаты во время игры');
+            return;
+        }
+        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        if(this.state.hostId != currentPlayer.id){
+            client.send('error', 'Менять приватность может только лидер комнаты!');
+            return;
+        }
+        this.state.isPrivateRoom = !this.state.isPrivateRoom;
+        this.updateMetadata();
+    }
 
     private onChangePlaceMessage = (client: Client, payload: string) => {
         const placeNum = (+payload).toString();
