@@ -48,6 +48,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('setLeaderPlayer', this.onSetLeaderPlayerMessage.bind(this));
         this.onMessage('togglePrivateRoom', this.onTogglePrivateMessage.bind(this));
         this.onMessage('changePlayersCount', this.changePlayersCountMessage.bind(this));
+        this.onMessage('ready', this.onReadyMessage.bind(this));
         // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
         // this.setSimulationInterval(() => this.update());
 
@@ -253,6 +254,11 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
     };
+
+    private onReadyMessage = (client: Client, state: boolean) => {
+        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        currentPlayer.isReady = !!state;
+    }
 
     private changePlayersCountMessage = (client: Client, direction: string) => {
         if(direction != 'add' && direction != 'sub'){

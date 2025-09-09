@@ -4,8 +4,9 @@ import {Scenario} from "./Scenario";
 
 export enum RoomStatus {
     WAITING = "waiting",
+    STARTING = "starting",
     PLAYING = "playing",
-    FINISHED = "finished"
+    FINISHED = "finished",
 }
 
 export enum GameStage {
