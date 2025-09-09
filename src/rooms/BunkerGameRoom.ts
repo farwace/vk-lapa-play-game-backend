@@ -24,8 +24,19 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     ];
 
     async onCreate(options: any) {
+        if(options?.isPrivate){
+            this.state.isPrivateRoom = true;
+        }
+        let cntPlayers = 8;
+
+        if(options?.playersCount){
+            if(parseInt(options?.playersCount) >= this.state.minPlayers && parseInt(options?.playersCount) <= this.state.maxPlayers){
+                cntPlayers = parseInt(options?.playersCount);
+            }
+        }
+
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
-        this.state.playersCount = 8;
+        this.state.playersCount = cntPlayers;
 
         for (let i = 0; i < this.state.playersCount; i++) {
             this.state.places.set(i.toString(), 0);
