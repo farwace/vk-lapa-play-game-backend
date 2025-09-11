@@ -1,10 +1,9 @@
 import {Client, Room} from "@colyseus/core";
 import {StateView} from "@colyseus/schema";
-import {BunkerGameRoomState, GameStage, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
+import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
 import {Player} from "./schema/bunker/Player";
-import {Scenario} from "../../schemas/Scenario";
 import {SimpleScenario} from "./schema/bunker/SimpleScenario";
 
 
@@ -335,11 +334,13 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         let playerOnPlace = false;
         let allPlayersOnPlaces = true;
         for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(placedPlayerId == currentPlayer.id){
-                playerOnPlace = true;
-            }
-            if(placedPlayerId == 0){
-                allPlayersOnPlaces = false;
+            if(parseInt(currentPlace) < (this.state.playersCount)){
+                if(placedPlayerId == currentPlayer.id){
+                    playerOnPlace = true;
+                }
+                if(placedPlayerId == 0){
+                    allPlayersOnPlaces = false;
+                }
             }
         }
 
@@ -347,27 +348,32 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             return;
         }
         if (this.turnTimer) {
+            this.state.status = RoomStatus.WAITING;
+            this.state.turnTimeRemaining = 0;
             this.turnTimer.clear();
         }
         currentPlayer.isReady = !!state;
-
+        console.log('>>> ALL PLAYERS ON PLACE', allPlayersOnPlaces);
         if(!allPlayersOnPlaces){
             return;
         }
 
         let allPlayersReady = true;
         for(const [currentPlace, placedPlayerId] of this.state.places){
-            let player = this.state.players.get(placedPlayerId.toString());
-            if(!player?.isReady){
-                allPlayersReady = false;
+            if(parseInt(currentPlace) < (this.state.playersCount)) {
+                let player = this.state.players.get(placedPlayerId.toString());
+                if (!player?.isReady) {
+                    allPlayersReady = false;
+                }
             }
         }
-
+        console.log('>>> ALL PLAYERS IS READY', allPlayersReady);
         if(!allPlayersReady){
             return;
         }
 
         this.state.turnTimeRemaining = 5;
+        this.state.status = RoomStatus.STARTING;
         this.turnTimer = this.clock.setInterval(() => {
             this.state.turnTimeRemaining--;
 
@@ -413,6 +419,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if(placesCount == playersCount && direction == 'sub'){
             client.send('error', 'Места заняты. Исключите игрока чтобы уменьшить количество мест');
             return;
+        }
+
+        for(const [playerId, player] of this.state.players.entries()) {
+            player.isReady = false;
         }
 
         if(direction == 'add'){

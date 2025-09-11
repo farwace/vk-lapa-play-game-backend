@@ -21,9 +21,9 @@ export type TCard = {
     name: string,
     type: string,
     active: boolean,
-    male_image_url: string | null,
-    female_image_url: string | null,
-    custom_data: null | {
+    maleImageUrl: string | null,
+    femaleImageUrl: string | null,
+    customData: null | {
         from?: number,
         to?: number
     }

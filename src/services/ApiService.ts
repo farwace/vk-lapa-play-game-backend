@@ -45,20 +45,20 @@ export class ApiService {
             scenario.name = res.data.data.name;
             scenario.description = res.data.data.description;
             scenario.imageUrl = res.data.data.imageUrl;
-            scenario.imageUrl = res.data.data.smallImageUrl;
+            scenario.smallImageUrl = res.data.data.smallImageUrl;
 
             for (let i of scenario.getAllCardTypes()){
                 if(res.data.data[i]){
                     res.data.data[i].forEach(cardData => {
                         const customData = new CardCustomData();
-                        if(cardData.custom_data?.from){
-                            customData.from = cardData.custom_data.from;
+                        if(cardData.customData?.from){
+                            customData.from = cardData.customData.from;
                         }
-                        if(cardData.custom_data?.to){
-                            customData.to = cardData.custom_data.to;
+                        if(cardData.customData?.to){
+                            customData.to = cardData.customData.to;
                         }
 
-                        const card = new Card(cardData.id.toString(), cardData.name, cardData.type, cardData.active, cardData.male_image_url || '', cardData.female_image_url || '', customData);
+                        const card = new Card(cardData.id.toString(), cardData.name, cardData.type, cardData.active, cardData.maleImageUrl || '', cardData.femaleImageUrl || '', customData);
                         scenario[i].push(card);
                     })
                 }
