@@ -1,10 +1,11 @@
 import {Client, Room} from "@colyseus/core";
-import {StateView} from "@colyseus/schema";
+import {ArraySchema, StateView} from "@colyseus/schema";
 import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
 import {Player} from "./schema/bunker/Player";
 import {SimpleScenario} from "./schema/bunker/SimpleScenario";
+import {Card, CardCustomData} from "./schema/bunker/Card";
 
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
@@ -127,6 +128,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             client.send('youAreSpectator');
         }
         else{
+            player.canSpeak = true;
             this.updateMetadata();
         }
 
@@ -273,42 +275,78 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         const usedCardIds = new Set();
 
-        for (const [_, player] of this.state.players) {
-            player.cards.clear();
-            player.age = 0;
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            if(parseInt(currentPlace) < (this.state.playersCount)){
+                if(placedPlayerId > 0){
+                    const player = this.state.players.get(placedPlayerId.toString());
+                    if(player?.id){
 
-            for (const type of scenario.getAllCardTypes()) {
-                if(type == 'cardsAge'){
-                    const age = Math.floor(Math.random() * 110) + 1;
-                    const cards = scenario[type]?.slice() || [];
-                    const filtered = cards.filter(card => {
-                        return (card.customData?.from || 20) <= age && (card.customData?.to || 20) >= age;
-                    });
-                    player.age = age;
-                    if(filtered.length > 0){
-                        player.cards.push(filtered[0]);
+                        player.cards.clear();
+                        player.age = 0;
+
+                        for (const type of scenario.getAllCardTypes()) {
+                            if(type == 'cardsAge'){
+                                const age = Math.floor(Math.random() * 110) + 1;
+                                const cards = scenario[type]?.slice() || [];
+                                const filtered = cards.filter(card => {
+                                    return (card.customData?.from || 20) <= age && (card.customData?.to || 20) >= age;
+                                });
+                                player.age = age;
+                                if(filtered.length > 0){
+                                    const customData = new CardCustomData();
+                                    customData.from = filtered[0].customData.from;
+                                    customData.to = filtered[0].customData.to;
+                                    customData.value = filtered[0].customData.value;
+
+                                    const card = new Card(
+                                        filtered[0].id,
+                                        filtered[0].name,
+                                        filtered[0].type,
+                                        filtered[0].active,
+                                        filtered[0].maleImageUrl,
+                                        filtered[0].femaleImageUrl,
+                                        customData
+                                    );
+                                    player.cards.push(card);
+                                }
+                                continue;
+                            }
+                            const cards = scenario[type]?.slice() || [];
+                            const isMale = player.isMale;
+
+                            // Фильтрация по полу (ищем подходящие изображения)
+                            const filtered = cards.filter(card => {
+                                return isMale ? !!card.maleImageUrl : !!card.femaleImageUrl;
+                            });
+
+                            // Убираем уже использованные карты
+                            const available = filtered.filter(card => !usedCardIds.has(card.id));
+
+                            // Если карт недостаточно — fallback на всё, что подходит
+                            const pool = available.length > 0 ? available : filtered;
+                            if (pool.length > 0) {
+                                const shuffled = pool.sort(() => Math.random() - 0.5);
+                                const selectedCard = shuffled[0];
+
+                                const card = new Card(
+                                    selectedCard.id,
+                                    selectedCard.name,
+                                    selectedCard.type,
+                                    selectedCard.active,
+                                    selectedCard.maleImageUrl,
+                                    selectedCard.femaleImageUrl,
+                                );
+                                player.cards.push(card);
+                                usedCardIds.add(selectedCard.id);
+                            }
+                        }
+
+                        const client = this.clients.find(c => c.sessionId == player.sessionId);
+                        if(client){
+                            client.view.remove(player);
+                            client.view.add(player);
+                        }
                     }
-                    continue;
-                }
-                const cards = scenario[type]?.slice() || [];
-                const isMale = player.isMale;
-
-                // Фильтрация по полу (ищем подходящие изображения)
-                const filtered = cards.filter(card => {
-                    return isMale ? !!card.maleImageUrl : !!card.femaleImageUrl;
-                });
-
-                // Убираем уже использованные карты
-                const available = filtered.filter(card => !usedCardIds.has(card.id));
-
-                // Если карт недостаточно — fallback на всё, что подходит
-                const pool = available.length > 0 ? available : filtered;
-
-                if (pool.length > 0) {
-                    const shuffled = pool.sort(() => Math.random() - 0.5);
-                    const selectedCard = shuffled[0];
-                    player.cards.push(selectedCard);
-                    usedCardIds.add(selectedCard.id);
                 }
             }
         }
@@ -353,7 +391,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.turnTimer.clear();
         }
         currentPlayer.isReady = !!state;
-        console.log('>>> ALL PLAYERS ON PLACE', allPlayersOnPlaces);
+
         if(!allPlayersOnPlaces){
             return;
         }
@@ -367,7 +405,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 }
             }
         }
-        console.log('>>> ALL PLAYERS IS READY', allPlayersReady);
+
         if(!allPlayersReady){
             return;
         }
