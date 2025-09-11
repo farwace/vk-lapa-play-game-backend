@@ -1,6 +1,6 @@
 import {ArraySchema, Schema, type, MapSchema} from "@colyseus/schema";
 import {Player} from "./Player";
-import {Scenario} from "./Scenario";
+import {SimpleScenario} from "./SimpleScenario";
 
 export enum RoomStatus {
     WAITING = "waiting",
@@ -33,12 +33,11 @@ export class BunkerGameRoomState extends Schema {
     @type({map: Player}) players = new MapSchema<Player>();
     @type(["string"]) eliminatedPlayers = new ArraySchema<string>();
     @type(["string"]) disconnectedPlayers = new ArraySchema<string>();
-    @type(Scenario) scenario = new Scenario();
+    @type(SimpleScenario) scenario = new SimpleScenario();
 
     @type("number") currentRound: number = 0;
-    @type("number") maxRounds: number = 0;
 
-    @type("number") turnTimeLimit: number = 15; // сколько секунд длится ход игрока
+    @type("number") turnTimeLimit: number = 30; // сколько секунд длится ход игрока
     @type("number") turnTimeRemaining: number = 0; // сколько секунд осталось до конца хода
 
     @type(["string"]) votingResults = new ArraySchema<string>();

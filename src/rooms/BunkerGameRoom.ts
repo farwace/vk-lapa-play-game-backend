@@ -1,9 +1,11 @@
-import {Room, Client} from "@colyseus/core";
+import {Client, Room} from "@colyseus/core";
 import {StateView} from "@colyseus/schema";
-import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
+import {BunkerGameRoomState, GameStage, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
 import {Player} from "./schema/bunker/Player";
+import {Scenario} from "../../schemas/Scenario";
+import {SimpleScenario} from "./schema/bunker/SimpleScenario";
 
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
@@ -255,9 +257,125 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     };
 
+    private startGame = () => {
+
+    }
+
+    private gameInit = async () => {
+        this.state.status = RoomStatus.PLAYING;
+        const scenario = await this.loadScenario();
+        this.state.scenario = new SimpleScenario(
+            scenario.id,
+            scenario.name,
+            scenario.description,
+            scenario.imageUrl,
+            scenario.smallImageUrl
+        );
+
+        const usedCardIds = new Set();
+
+        for (const [_, player] of this.state.players) {
+            player.cards.clear();
+            player.age = 0;
+
+            for (const type of scenario.getAllCardTypes()) {
+                if(type == 'cardsAge'){
+                    const age = Math.floor(Math.random() * 110) + 1;
+                    const cards = scenario[type]?.slice() || [];
+                    const filtered = cards.filter(card => {
+                        return (card.customData?.from || 20) <= age && (card.customData?.to || 20) >= age;
+                    });
+                    player.age = age;
+                    if(filtered.length > 0){
+                        player.cards.push(filtered[0]);
+                    }
+                    continue;
+                }
+                const cards = scenario[type]?.slice() || [];
+                const isMale = player.isMale;
+
+                // Фильтрация по полу (ищем подходящие изображения)
+                const filtered = cards.filter(card => {
+                    return isMale ? !!card.maleImageUrl : !!card.femaleImageUrl;
+                });
+
+                // Убираем уже использованные карты
+                const available = filtered.filter(card => !usedCardIds.has(card.id));
+
+                // Если карт недостаточно — fallback на всё, что подходит
+                const pool = available.length > 0 ? available : filtered;
+
+                if (pool.length > 0) {
+                    const shuffled = pool.sort(() => Math.random() - 0.5);
+                    const selectedCard = shuffled[0];
+                    player.cards.push(selectedCard);
+                    usedCardIds.add(selectedCard.id);
+                }
+            }
+        }
+
+        this.broadcast("gameInit");
+        this.state.turnTimeRemaining = 15;
+        this.turnTimer = this.clock.setInterval(() => {
+            this.state.turnTimeRemaining--;
+
+            if (this.state.turnTimeRemaining <= 0) {
+                this.turnTimer.clear();
+                this.startGame();
+            }
+        }, 1000);
+    }
+
     private onReadyMessage = (client: Client, state: boolean) => {
+        if(this.state.status != RoomStatus.WAITING && this.state.status != RoomStatus.STARTING) {
+            return;
+        }
+
         const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
+        let playerOnPlace = false;
+        let allPlayersOnPlaces = true;
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            if(placedPlayerId == currentPlayer.id){
+                playerOnPlace = true;
+            }
+            if(placedPlayerId == 0){
+                allPlayersOnPlaces = false;
+            }
+        }
+
+        if(!playerOnPlace){
+            return;
+        }
+        if (this.turnTimer) {
+            this.turnTimer.clear();
+        }
         currentPlayer.isReady = !!state;
+
+        if(!allPlayersOnPlaces){
+            return;
+        }
+
+        let allPlayersReady = true;
+        for(const [currentPlace, placedPlayerId] of this.state.places){
+            let player = this.state.players.get(placedPlayerId.toString());
+            if(!player?.isReady){
+                allPlayersReady = false;
+            }
+        }
+
+        if(!allPlayersReady){
+            return;
+        }
+
+        this.state.turnTimeRemaining = 5;
+        this.turnTimer = this.clock.setInterval(() => {
+            this.state.turnTimeRemaining--;
+
+            if (this.state.turnTimeRemaining <= 0) {
+                this.turnTimer.clear();
+                this.gameInit();
+            }
+        }, 1000);
     }
 
     private changePlayersCountMessage = (client: Client, direction: string) => {
