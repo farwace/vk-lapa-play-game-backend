@@ -4,15 +4,20 @@ import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomSta
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
 import {Player} from "./schema/bunker/Player";
-import {SimpleScenario} from "./schema/bunker/SimpleScenario";
-import {Card, CardCustomData} from "./schema/bunker/Card";
-
+import { PlayerHandler } from "./handlers/PlayerHandler";
+import { RoomHandler } from "./handlers/RoomHandler";
+import { GameHandler } from "./handlers/GameHandler";
+import { GameUtils } from "./handlers/GameUtils";
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     maxClients = 12;
     state = new BunkerGameRoomState();
 
-    private turnTimer: Delayed | null = null;
+    public turnTimer: Delayed | null = null;
+
+    private playerHandler: PlayerHandler;
+    private roomHandler: RoomHandler;
+    private gameHandler: GameHandler;
 
     private allCardTypes = [
         "cardsProfession",
@@ -26,6 +31,11 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     ];
 
     async onCreate(options: any) {
+        // Инициализация обработчиков
+        this.playerHandler = new PlayerHandler(this);
+        this.roomHandler = new RoomHandler(this);
+        this.gameHandler = new GameHandler(this);
+
         if(options?.isPrivate){
             this.state.isPrivateRoom = true;
         }
@@ -45,26 +55,17 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
         this.updateMetadata();
-        this.onMessage('changePlace', this.onChangePlaceMessage.bind(this));
-        this.onMessage('kickPlayer', this.onKickPlayerMessage.bind(this));
-        this.onMessage('setLeaderPlayer', this.onSetLeaderPlayerMessage.bind(this));
-        this.onMessage('togglePrivateRoom', this.onTogglePrivateMessage.bind(this));
-        this.onMessage('changePlayersCount', this.changePlayersCountMessage.bind(this));
-        this.onMessage('ready', this.onReadyMessage.bind(this));
-        // this.onMessage("kickPlayer", this.onKickPlayer.bind(this));
-        // this.setSimulationInterval(() => this.update());
 
+        // Привязка обработчиков сообщений
+        this.onMessage('changePlace', this.playerHandler.onChangePlace.bind(this.playerHandler));
+        this.onMessage('kickPlayer', this.playerHandler.onKickPlayer.bind(this.playerHandler));
+        this.onMessage('setLeaderPlayer', this.playerHandler.onSetLeaderPlayer.bind(this.playerHandler));
+        this.onMessage('togglePrivateRoom', this.roomHandler.onTogglePrivate.bind(this.roomHandler));
+        this.onMessage('changePlayersCount', this.roomHandler.onChangePlayersCount.bind(this.roomHandler));
+        this.onMessage('ready', this.gameHandler.onReady.bind(this.gameHandler));
     }
 
-    private loadScenario = async () => {
-        try {
-            return await ApiService.getRandomScenario();
-        } catch (error) {
-            return undefined;
-        }
-    }
-
-    private updateMetadata = () => {
+    public updateMetadata = () => {
         let availablePlaces = 0;
 
         for(const [index, playerId] of this.state.places){
@@ -109,11 +110,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             player = new Player(client.sessionId, userData);
         } else {
             isReconnected = true;
-            player.sessionId = client.sessionId; // обновим сессию при реконнекте
+            player.sessionId = client.sessionId;
         }
 
         let placed = false;
-        // если игра не началась — пытаемся занять место
         if (this.state.status === RoomStatus.WAITING) {
             for (const [index, pid] of this.state.places) {
                 if (!pid) {
@@ -137,22 +137,18 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         const discIdx = this.state.disconnectedPlayers.indexOf(player.id.toString());
         if (discIdx > -1) this.state.disconnectedPlayers.splice(discIdx, 1);
 
-        // первый игрок становится хостом
         if (this.clients.length === 0 || this.state.hostId === 0) {
             this.state.hostId = player.id;
         }
-
 
         this.state.players.set(player.id.toString(), player);
         client.view = new StateView();
         client.view.add(player);
 
         this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
-        //todo: отправка пользователю что он наблюдатель
     }
 
-
-    private findPlayerByClientSessionId(sessionId: string): Player | undefined {
+    public findPlayerByClientSessionId(sessionId: string): Player | undefined {
         for(const [playerId, player] of this.state.players.entries()) {
             if(player.sessionId == sessionId){
                 return player;
@@ -173,16 +169,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     }
 
     onLeave(client: Client, consented: boolean) {
-
         const player = this.findPlayerByClientSessionId(client.sessionId);
         if (!player) { return; }
 
         if(this.state.status == RoomStatus.PLAYING) {
             player.isConnected = false;
             this.broadcast("playerDisconnected", { playerId: player.id });
-            //todo: выключить микрофон и переключить на следующего
-            //todo: проверка на закрытие комнаты так как все вышли
-
             return;
         }
 
@@ -202,10 +194,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         this.updateMetadata();
         this.broadcast("playerLeft", { playerId: player.id });
-
-
-        // todo: Проверяем условия окончания игры
-        // this.checkGameEndConditions();
     }
 
     onDispose() {
@@ -213,392 +201,15 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.turnTimer = null;
     }
 
-
-    private replacePlayersPlaces = () => {
-        const currentCount = this.state.playersCount;        // допустимые места: 0..currentCount-1
-        const places = this.state.places;                    // MapSchema<number>
-
-        const candidates: Array<{ index: number; playerId: number }> = [];
-        const freeSeats: number[] = [];
-
-        // 1) Собираем кандидатов (сидят на местах >= currentCount) и свободные места внутри диапазона
-        for (const [key, playerId] of places) {
-            const idx = Number(key);
-
-            if (idx >= currentCount) {
-                if (playerId > 0) candidates.push({ index: idx, playerId });
-            } else {
-                if (playerId === 0) freeSeats.push(idx);
-            }
-        }
-
-        if (candidates.length === 0 && freeSeats.length === 0) {
-            return; // ничего делать не нужно
-        }
-
-        // Приоритет: пересаживаем с меньших "вне-диапазонных" индексов в меньшие свободные места
-        candidates.sort((a, b) => a.index - b.index);  // напр.: 6 перед 7
-        freeSeats.sort((a, b) => a - b);               // напр.: 1 перед 4
-
-        // 2) Пересаживаем сколько поместится
-        const moveCount = Math.min(candidates.length, freeSeats.length);
-        for (let i = 0; i < moveCount; i++) {
-            const { playerId } = candidates[i];
-            const targetSeat = freeSeats[i];
-            places.set(targetSeat.toString(), playerId);
-        }
-
-        // 3) Обнуляем все места вне диапазона (>= currentCount)
-        for (const [key] of places) {
-            const idx = Number(key);
-            if (idx >= currentCount) {
-                places.set(key, 0);
-            }
-        }
-
-    };
-
-    private startGame = () => {
-
+    public replacePlayersPlaces = () => {
+        GameUtils.replacePlayersPlaces(this);
     }
 
-    private gameInit = async () => {
-        this.state.status = RoomStatus.PLAYING;
-        const scenario = await this.loadScenario();
-        this.state.scenario = new SimpleScenario(
-            scenario.id,
-            scenario.name,
-            scenario.description,
-            scenario.imageUrl,
-            scenario.smallImageUrl
-        );
-
-        const usedCardIds = new Set();
-
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(parseInt(currentPlace) < (this.state.playersCount)){
-                if(placedPlayerId > 0){
-                    const player = this.state.players.get(placedPlayerId.toString());
-                    if(player?.id){
-
-                        player.cards.clear();
-
-                        for (const type of scenario.getAllCardTypes()) {
-                            if(type == 'cardsAge'){
-                                const age = Math.floor(Math.random() * 110) + 1;
-                                const cards = scenario[type]?.slice() || [];
-                                const filtered = cards.filter(card => {
-                                    return (card.customData?.from || 20) <= age && (card.customData?.to || 20) >= age;
-                                });
-
-                                if(filtered.length > 0){
-                                    const customData = new CardCustomData();
-                                    customData.from = filtered[0].customData.from;
-                                    customData.to = filtered[0].customData.to;
-                                    customData.value = age;
-
-                                    const card = new Card(
-                                        filtered[0].id,
-                                        filtered[0].name,
-                                        filtered[0].type,
-                                        filtered[0].active,
-                                        filtered[0].maleImageUrl,
-                                        filtered[0].femaleImageUrl,
-                                        customData
-                                    );
-                                    player.cards.push(card);
-                                }
-                                continue;
-                            }
-                            const cards = scenario[type]?.slice() || [];
-                            const isMale = player.isMale;
-
-                            // Фильтрация по полу (ищем подходящие изображения)
-                            const filtered = cards.filter(card => {
-                                return card.active && (isMale ? !!card.maleImageUrl : !!card.femaleImageUrl);
-                            });
-
-                            // Убираем уже использованные карты
-                            const available = filtered.filter(card => !usedCardIds.has(card.id));
-
-                            // Если карт недостаточно — fallback на всё, что подходит
-                            const pool = available.length > 0 ? available : filtered;
-                            if (pool.length > 0) {
-                                const shuffled = pool.sort(() => Math.random() - 0.5);
-                                const selectedCard = shuffled[0];
-
-                                const card = new Card(
-                                    selectedCard.id,
-                                    selectedCard.name,
-                                    selectedCard.type,
-                                    selectedCard.active,
-                                    selectedCard.maleImageUrl,
-                                    selectedCard.femaleImageUrl,
-                                );
-                                player.cards.push(card);
-                                usedCardIds.add(selectedCard.id);
-                            }
-                        }
-
-                        const client = this.clients.find(c => c.sessionId == player.sessionId);
-                        if(client){
-                            client.view.remove(player);
-                            client.view.add(player);
-                        }
-                    }
-                }
-            }
-        }
-
-        this.broadcast("gameInit");
-        this.state.turnTimeRemaining = 15;
-        this.turnTimer = this.clock.setInterval(() => {
-            this.state.turnTimeRemaining--;
-
-            if (this.state.turnTimeRemaining <= 0) {
-                this.turnTimer.clear();
-                this.startGame();
-            }
-        }, 1000);
+    public startGame = () => {
+        // Логика старта игры будет здесь
     }
 
-    private onReadyMessage = (client: Client, state: boolean) => {
-        if(this.state.status != RoomStatus.WAITING && this.state.status != RoomStatus.STARTING) {
-            return;
-        }
-
-        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
-        let playerOnPlace = false;
-        let allPlayersOnPlaces = true;
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(parseInt(currentPlace) < (this.state.playersCount)){
-                if(placedPlayerId == currentPlayer.id){
-                    playerOnPlace = true;
-                }
-                if(placedPlayerId == 0){
-                    allPlayersOnPlaces = false;
-                }
-            }
-        }
-
-        if(!playerOnPlace){
-            return;
-        }
-        if (this.turnTimer) {
-            this.state.status = RoomStatus.WAITING;
-            this.state.turnTimeRemaining = 0;
-            this.turnTimer.clear();
-        }
-        currentPlayer.isReady = !!state;
-
-        if(!allPlayersOnPlaces){
-            return;
-        }
-
-        let allPlayersReady = true;
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(parseInt(currentPlace) < (this.state.playersCount)) {
-                let player = this.state.players.get(placedPlayerId.toString());
-                if (!player?.isReady) {
-                    allPlayersReady = false;
-                }
-            }
-        }
-
-        if(!allPlayersReady){
-            return;
-        }
-
-        this.state.turnTimeRemaining = 5;
-        this.state.status = RoomStatus.STARTING;
-        this.turnTimer = this.clock.setInterval(() => {
-            this.state.turnTimeRemaining--;
-
-            if (this.state.turnTimeRemaining <= 0) {
-                this.turnTimer.clear();
-                this.gameInit();
-            }
-        }, 1000);
+    public gameInit = async () => {
+        await GameUtils.initGame(this);
     }
-
-    private changePlayersCountMessage = (client: Client, direction: string) => {
-        if(direction != 'add' && direction != 'sub'){
-            return;
-        }
-
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя менять количество игроков во время игры');
-            return;
-        }
-        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
-        if(this.state.hostId != currentPlayer.id){
-            client.send('error', 'Менять количество игроков может только лидер комнаты!');
-            return;
-        }
-
-        const playersCount = this.state.playersCount;
-        if(playersCount == this.state.minPlayers && direction == 'sub'){
-            client.send('error', 'Минимум ' + this.state.minPlayers + ' игроков');
-            return;
-        }
-        if(playersCount == this.state.maxPlayers && direction == 'add'){
-            client.send('error', 'Максимум ' + this.state.maxPlayers + ' игроков');
-            return;
-        }
-
-        let placesCount = 0;
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(placedPlayerId > 0){
-                placesCount ++;
-            }
-        }
-
-        if(placesCount == playersCount && direction == 'sub'){
-            client.send('error', 'Места заняты. Исключите игрока чтобы уменьшить количество мест');
-            return;
-        }
-
-        for(const [playerId, player] of this.state.players.entries()) {
-            player.isReady = false;
-        }
-
-        if(direction == 'add'){
-            this.state.playersCount += 1;
-        }
-        else{
-            this.state.playersCount -= 1;
-        }
-        this.updateMetadata();
-        this.replacePlayersPlaces();
-    }
-
-    private onTogglePrivateMessage = (client: Client) => {
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя менять приватность комнаты во время игры');
-            return;
-        }
-        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
-        if(this.state.hostId != currentPlayer.id){
-            client.send('error', 'Менять приватность может только лидер комнаты!');
-            return;
-        }
-        this.state.isPrivateRoom = !this.state.isPrivateRoom;
-        this.updateMetadata();
-    }
-
-    private onChangePlaceMessage = (client: Client, payload: string) => {
-        const placeNum = (+payload).toString();
-        const placeValue = this.state.places.get(placeNum);
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя менять место во время игры');
-            return;
-        }
-
-        if((+placeNum) >= this.state.maxPlayers || (+placeNum) < 0){
-            client.send('error', 'Нельзя занять это место');
-            return;
-        }
-
-        if(placeValue != 0 || (+placeNum) >= this.state.playersCount){
-            client.send('error', 'Место занято');
-            return;
-        }
-
-        const player = this.findPlayerByClientSessionId(client.sessionId);
-        if(!player){
-            client.send('error', 'Не удалось идентифицировать игрока');
-            return;
-        }
-
-        for(const [currentPlace, placedPlayerId] of this.state.places){
-            if(placedPlayerId == player.id){
-                this.state.places.set(currentPlace, 0);
-            }
-        }
-
-        this.state.places.set(placeNum, player.id);
-    }
-
-    private onKickPlayerMessage = (client: Client, playerId: string) => {
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя исключать игроков во время игры');
-            return;
-        }
-
-        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
-        if(this.state.hostId != currentPlayer.id){
-            client.send('error', 'Исключать игроков может только лидер комнаты!');
-            return;
-        }
-
-        const player = this.state.players.get(playerId);
-        if(!player || !player?.id){
-            client.send('error', 'Игрок не найден!');
-            return;
-        }
-
-        if(currentPlayer.id == player.id){
-            client.send('error', 'Нельзя исключить самого себя!');
-            return;
-        }
-
-        const playerClient = this.clients.find(c => c.sessionId === player.sessionId);
-        if (!playerClient) {
-            return;
-        }
-
-        try {
-            for(const [currentPlace, placedPlayerId] of this.state.places){
-                if(placedPlayerId == player.id){
-                    this.state.places.set(currentPlace, 0);
-                }
-            }
-
-            playerClient.send('kicked', 'Вас исключили из комнаты')
-            playerClient.leave(1000, "Kicked by host");
-            this.state.players.delete(playerId);
-
-            this.broadcast("playerKicked", {
-                player: player
-            }, {except: playerClient});
-        }
-        catch (error) {}
-
-    }
-    private onSetLeaderPlayerMessage = (client: Client, playerId: string) => {
-        if(this.state.status != RoomStatus.WAITING) {
-            client.send('error', 'Нельзя менять лидера во время игры');
-            return;
-        }
-
-        const currentPlayer = this.findPlayerByClientSessionId(client.sessionId);
-        if(this.state.hostId != currentPlayer.id){
-            client.send('error', 'Назначать лидера комнаты может только лидер комнаты!');
-            return;
-        }
-
-        const player = this.state.players.get(playerId);
-        if(!player || !player?.id){
-            client.send('error', 'Игрок не найден!');
-            return;
-        }
-
-        if(currentPlayer.id == player.id){
-            client.send('error', 'Нельзя назначить лидером самого себя!');
-            return;
-        }
-
-        const playerClient = this.clients.find(c => c.sessionId === player.sessionId);
-        if (!playerClient) {
-            return;
-        }
-
-        try {
-            this.state.hostId = player.id;
-            this.broadcast("leaderChanged", player.id);
-        }
-        catch (error) {}
-
-    }
-
 }
