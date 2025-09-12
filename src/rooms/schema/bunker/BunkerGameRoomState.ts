@@ -36,11 +36,15 @@ export class BunkerGameRoomState extends Schema {
     @type(SimpleScenario) scenario = new SimpleScenario();
 
     @type("number") currentRound: number = 0;
+    @type("number") maxAbstainRounds: number = 2; // количество раундов, когда можно воздержаться
+    @type("boolean") canAbstainThisRound: boolean = true; // можно ли воздержаться в текущем раунде
 
     @type("number") turnTimeLimit: number = 30; // сколько секунд длится ход игрока
     @type("number") turnTimeRemaining: number = 0; // сколько секунд осталось до конца хода
+    @type("number") cardRevealTimeRemaining: number = 0; // сколько секунд осталось для выбора карты
 
     @type(["string"]) votingResults = new ArraySchema<string>();
+    @type({map: "string"}) currentVotes = new MapSchema<string>(); // голоса игроков в текущем раунде
 
     @type(["string"]) activeCardTypes = new ArraySchema<string>();
 }

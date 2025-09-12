@@ -1,0 +1,524 @@
+import { BunkerGameRoom } from "../BunkerGameRoom";
+import { GameStage, RoomStatus } from "../schema/bunker/BunkerGameRoomState";
+import { Player } from "../schema/bunker/Player";
+import { Card } from "../schema/bunker/Card";
+
+export class GameEngine {
+    private room: BunkerGameRoom;
+    private speakingPlayerQueue: number[] = [];
+    private currentPlayerIndex: number = 0;
+    private cardRevealTimer: any = null;
+
+    constructor(room: BunkerGameRoom) {
+        this.room = room;
+    }
+
+    public startGame() {
+        this.room.state.gameStage = GameStage.CARD_REVEAL;
+        this.room.state.currentRound = 1;
+        this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
+
+        // Создаем очередь активных игроков (не исключенных)
+        this.createPlayerQueue();
+
+        if (this.speakingPlayerQueue.length > 0) {
+            this.currentPlayerIndex = 0;
+            this.startPlayerTurn();
+        }
+    }
+
+    private createPlayerQueue() {
+        this.speakingPlayerQueue = [];
+
+        // Собираем игроков с мест, которые не исключены
+        for (const [place, playerId] of this.room.state.places) {
+            if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
+                const player = this.room.state.players.get(playerId.toString());
+                if (player && !player.isEliminated) {
+                    this.speakingPlayerQueue.push(playerId);
+                }
+            }
+        }
+    }
+
+    private startPlayerTurn() {
+        if (this.currentPlayerIndex >= this.speakingPlayerQueue.length) {
+            // Все игроки высказались, переходим к голосованию
+            this.startVoting();
+            return;
+        }
+
+        const currentPlayerId = this.speakingPlayerQueue[this.currentPlayerIndex];
+        const currentPlayer = this.room.state.players.get(currentPlayerId.toString());
+
+        if (!currentPlayer || currentPlayer.isEliminated) {
+            this.nextPlayer();
+            return;
+        }
+
+        this.room.state.currentSpeakerId = currentPlayerId.toString();
+        this.room.state.turnTimeRemaining = this.room.state.turnTimeLimit;
+        this.room.state.cardRevealTimeRemaining = 10; // 10 секунд на выбор карты
+
+        // Если игрок отключен, сразу открываем случайную карту и переходим к следующему через 3 секунды
+        if (!currentPlayer.isConnected) {
+            this.forceRevealRandomCard(currentPlayer);
+            setTimeout(() => {
+                this.nextPlayer();
+            }, 3000);
+            return;
+        }
+
+        this.room.broadcast("playerTurnStarted", {
+            playerId: currentPlayerId,
+            timeRemaining: this.room.state.turnTimeRemaining,
+            cardRevealTime: this.room.state.cardRevealTimeRemaining
+        });
+
+        // Запускаем таймер для карты (10 секунд)
+        this.startCardRevealTimer(currentPlayer);
+
+        // Запускаем общий таймер хода (30 секунд)
+        this.room.turnTimer = this.room.clock.setInterval(() => {
+            this.room.state.turnTimeRemaining--;
+
+            if (this.room.state.turnTimeRemaining <= 0) {
+                this.room.turnTimer?.clear();
+                this.room.turnTimer = null;
+                this.nextPlayer();
+            }
+        }, 1000);
+    }
+
+    private startCardRevealTimer(player: Player) {
+        this.cardRevealTimer = this.room.clock.setInterval(() => {
+            this.room.state.cardRevealTimeRemaining--;
+
+            if (this.room.state.cardRevealTimeRemaining <= 0) {
+                if (this.cardRevealTimer) {
+                    this.cardRevealTimer.clear();
+                    this.cardRevealTimer = null;
+                }
+
+                // Принудительно открываем случайную карту, если игрок не сделал выбор
+                this.forceRevealRandomCard(player);
+            }
+        }, 1000);
+    }
+
+    public revealCard(playerId: string, cardId: string): boolean {
+        const player = this.room.state.players.get(playerId);
+        if (!player || player.id.toString() !== this.room.state.currentSpeakerId) {
+            return false;
+        }
+
+        // Проверяем, что карта принадлежит игроку
+        const cardIndex = player.cards.findIndex(card => card.id === cardId);
+        if (cardIndex === -1) {
+            return false;
+        }
+
+        // Проверяем, что карта еще не открыта
+        const isAlreadyRevealed = player.revealedCards.some(card => card.id === cardId);
+        if (isAlreadyRevealed) {
+            return false;
+        }
+
+        // Копируем карту в открытые
+        const card = player.cards[cardIndex];
+        const revealedCard = new Card(
+            card.id,
+            card.name,
+            card.type,
+            card.active,
+            card.maleImageUrl,
+            card.femaleImageUrl,
+            card.customData
+        );
+        revealedCard.isRevealed = true;
+        player.revealedCards.push(revealedCard);
+        card.isRevealed = true;
+
+        // Останавливаем таймер для карт
+        if (this.cardRevealTimer) {
+            this.cardRevealTimer.clear();
+            this.cardRevealTimer = null;
+        }
+        this.room.state.cardRevealTimeRemaining = 0;
+
+        this.room.broadcast("cardRevealed", {
+            playerId: player.id,
+            card: {
+                id: revealedCard.id,
+                name: revealedCard.name,
+                type: revealedCard.type,
+                imageUrl: player.isMale ? revealedCard.maleImageUrl : revealedCard.femaleImageUrl,
+                customData: revealedCard.customData
+            }
+        });
+
+        return true;
+    }
+
+    private forceRevealRandomCard(player: Player) {
+        // Находим карты, которые еще не открыты
+        const unrevealedCards = player.cards.filter(card =>
+            !player.revealedCards.some(revealed => revealed.id === card.id)
+        );
+
+        if (unrevealedCards.length === 0) {
+            return; // Нет карт для открытия
+        }
+
+        // Выбираем случайную карту
+        const randomIndex = Math.floor(Math.random() * unrevealedCards.length);
+        const cardToReveal = unrevealedCards[randomIndex];
+
+        // Копируем карту в открытые
+        const revealedCard = new Card(
+            cardToReveal.id,
+            cardToReveal.name,
+            cardToReveal.type,
+            cardToReveal.active,
+            cardToReveal.maleImageUrl,
+            cardToReveal.femaleImageUrl,
+            cardToReveal.customData
+        );
+        revealedCard.isRevealed = true;
+        player.revealedCards.push(revealedCard);
+
+        this.room.broadcast("cardRevealed", {
+            playerId: player.id,
+            card: {
+                id: revealedCard.id,
+                name: revealedCard.name,
+                type: revealedCard.type,
+                imageUrl: player.isMale ? revealedCard.maleImageUrl : revealedCard.femaleImageUrl,
+                customData: revealedCard.customData
+            }
+        });
+    }
+
+    public finishSpeaking(playerId: string): boolean {
+        if (playerId !== this.room.state.currentSpeakerId) {
+            return false;
+        }
+
+        const player = this.room.state.players.get(playerId);
+        if (!player) {
+            return false;
+        }
+
+        // Если карта еще не открыта, принудительно открываем случайную
+        if (this.room.state.cardRevealTimeRemaining > 0) {
+            this.forceRevealRandomCard(player);
+        }
+
+        if (this.cardRevealTimer) {
+            this.cardRevealTimer.clear();
+            this.cardRevealTimer = null;
+        }
+
+        if (this.room.turnTimer) {
+            this.room.turnTimer.clear();
+            this.room.turnTimer = null;
+        }
+
+        this.nextPlayer();
+        return true;
+    }
+
+    private nextPlayer() {
+        this.currentPlayerIndex++;
+
+        if (this.currentPlayerIndex >= this.speakingPlayerQueue.length) {
+            this.startVoting();
+        } else {
+            this.startPlayerTurn();
+        }
+    }
+
+    private startVoting() {
+        this.room.state.gameStage = GameStage.VOTING;
+        this.room.state.currentSpeakerId = "";
+        this.room.state.turnTimeRemaining = 30; // 30 секунд на голосование
+        this.room.state.currentVotes.clear();
+
+        // Сбрасываем голоса всех игроков
+        for (const [_, player] of this.room.state.players) {
+            player.votesAgainst = 0;
+        }
+
+        this.room.broadcast("votingStarted", {
+            timeRemaining: this.room.state.turnTimeRemaining,
+            canAbstain: this.room.state.canAbstainThisRound,
+            round: this.room.state.currentRound
+        });
+
+        this.room.turnTimer = this.room.clock.setInterval(() => {
+            this.room.state.turnTimeRemaining--;
+
+            if (this.room.state.turnTimeRemaining <= 0) {
+                this.room.turnTimer?.clear();
+                this.room.turnTimer = null;
+                this.finishVoting();
+            }
+        }, 1000);
+    }
+
+    public vote(voterId: string, targetId: string): boolean {
+        if (this.room.state.gameStage !== GameStage.VOTING) {
+            return false;
+        }
+
+        const voter = this.room.state.players.get(voterId);
+        if (!voter || voter.isEliminated) {
+            return false;
+        }
+
+        // Проверяем, что игрок на месте и может голосовать
+        let voterOnPlace = false;
+        for (const [place, playerId] of this.room.state.places) {
+            if (parseInt(place) < this.room.state.playersCount && playerId === voter.id) {
+                voterOnPlace = true;
+                break;
+            }
+        }
+
+        if (!voterOnPlace) {
+            return false;
+        }
+
+        // Проверяем воздержание
+        if (targetId === "0") {
+            if (!this.room.state.canAbstainThisRound) {
+                return false; // Нельзя воздержаться в этом раунде
+            }
+            this.room.state.currentVotes.set(voterId, "0");
+        } else {
+            const target = this.room.state.players.get(targetId);
+            if (!target || target.isEliminated) {
+                return false;
+            }
+
+            // Проверяем, что цель на месте
+            let targetOnPlace = false;
+            for (const [place, playerId] of this.room.state.places) {
+                if (parseInt(place) < this.room.state.playersCount && playerId === target.id) {
+                    targetOnPlace = true;
+                    break;
+                }
+            }
+
+            if (!targetOnPlace) {
+                return false;
+            }
+
+            this.room.state.currentVotes.set(voterId, targetId);
+        }
+
+        // Проверяем, проголосовали ли все
+        this.checkAllVoted();
+        return true;
+    }
+
+    private checkAllVoted() {
+        const activePlayers = [];
+
+        for (const [place, playerId] of this.room.state.places) {
+            if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
+                const player = this.room.state.players.get(playerId.toString());
+                if (player && !player.isEliminated) {
+                    activePlayers.push(playerId.toString());
+                }
+            }
+        }
+
+        const votedPlayers = activePlayers.filter(playerId =>
+            this.room.state.currentVotes.has(playerId)
+        );
+
+        if (votedPlayers.length === activePlayers.length) {
+            // Все проголосовали, завершаем голосование досрочно
+            if (this.room.turnTimer) {
+                this.room.turnTimer.clear();
+                this.room.turnTimer = null;
+            }
+            this.finishVoting();
+        }
+    }
+
+    private finishVoting() {
+        this.room.state.gameStage = GameStage.RESULTS;
+        this.room.state.turnTimeRemaining = 7; // 7 секунд на результаты
+
+        // Подсчитываем голоса
+        const voteCount: { [key: string]: number } = {};
+        let totalVotes = 0;
+
+        for (const [_, targetId] of this.room.state.currentVotes) {
+            if (targetId !== "0") { // Не считаем воздержавшихся
+                voteCount[targetId] = (voteCount[targetId] || 0) + 1;
+                totalVotes++;
+            }
+        }
+
+        // Обновляем votesAgainst у игроков
+        for (const [targetId, votes] of Object.entries(voteCount)) {
+            const player = this.room.state.players.get(targetId);
+            if (player) {
+                player.votesAgainst = votes;
+            }
+        }
+
+        let eliminatedPlayerId: string | null = null;
+
+        if (totalVotes === 0) {
+            // Никто не голосовал или все воздержались
+            if (!this.room.state.canAbstainThisRound) {
+                // Выбираем случайного игрока для исключения
+                const candidates = [];
+                for (const [place, playerId] of this.room.state.places) {
+                    if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
+                        const player = this.room.state.players.get(playerId.toString());
+                        if (player && !player.isEliminated) {
+                            candidates.push(playerId.toString());
+                        }
+                    }
+                }
+                if (candidates.length > 0) {
+                    eliminatedPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
+                }
+            }
+        } else {
+            // Находим игроков с максимальным количеством голосов
+            const maxVotes = Math.max(...Object.values(voteCount));
+            const candidates = Object.keys(voteCount).filter(playerId => voteCount[playerId] === maxVotes);
+
+            if (candidates.length === 1) {
+                eliminatedPlayerId = candidates[0];
+            } else if (candidates.length > 1) {
+                // Несколько кандидатов с одинаковым количеством голосов
+                if (this.room.state.canAbstainThisRound) {
+                    // Можно воздержаться, никто не выбывает
+                    eliminatedPlayerId = null;
+                } else {
+                    // Нельзя воздержаться, выбираем случайного из кандидатов
+                    eliminatedPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
+                }
+            }
+        }
+
+        this.room.broadcast("votingResults", {
+            votes: voteCount,
+            eliminatedPlayerId: eliminatedPlayerId,
+            round: this.room.state.currentRound
+        });
+
+        this.room.turnTimer = this.room.clock.setInterval(() => {
+            this.room.state.turnTimeRemaining--;
+
+            if (this.room.state.turnTimeRemaining <= 0) {
+                this.room.turnTimer?.clear();
+                this.room.turnTimer = null;
+                this.processEliminationAndContinue(eliminatedPlayerId);
+            }
+        }, 1000);
+    }
+
+    private processEliminationAndContinue(eliminatedPlayerId: string | null) {
+        if (eliminatedPlayerId) {
+            const eliminatedPlayer = this.room.state.players.get(eliminatedPlayerId);
+            if (eliminatedPlayer) {
+                eliminatedPlayer.isEliminated = true;
+                this.room.state.eliminatedPlayers.push(eliminatedPlayerId);
+
+                // Открываем все карты исключенного игрока
+                for (const card of eliminatedPlayer.cards) {
+                    const isAlreadyRevealed = eliminatedPlayer.revealedCards.some(revealed => revealed.id === card.id);
+                    if (!isAlreadyRevealed) {
+                        const revealedCard = new Card(
+                            card.id,
+                            card.name,
+                            card.type,
+                            card.active,
+                            card.maleImageUrl,
+                            card.femaleImageUrl,
+                            card.customData
+                        );
+                        revealedCard.isRevealed = true;
+                        eliminatedPlayer.revealedCards.push(revealedCard);
+                    }
+                }
+            }
+        }
+
+        // Подсчитываем оставшихся игроков
+        const remainingPlayers = [];
+        for (const [place, playerId] of this.room.state.places) {
+            if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
+                const player = this.room.state.players.get(playerId.toString());
+                if (player && !player.isEliminated) {
+                    remainingPlayers.push(player);
+                }
+            }
+        }
+
+        if (remainingPlayers.length <= 2) {
+            // Игра окончена
+            this.endGame(remainingPlayers);
+        } else {
+            // Продолжаем игру
+            this.room.state.currentRound++;
+            this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
+            this.startGame();
+        }
+    }
+
+    private endGame(winners: Player[]) {
+        this.room.state.status = RoomStatus.FINISHED;
+
+        const results = [];
+        let place = 1;
+
+        // Победители (топ-2)
+        for (const winner of winners) {
+            results.push({
+                playerId: winner.id,
+                place: place++,
+                isWinner: true
+            });
+        }
+
+        // Исключенные игроки (в обратном порядке исключения)
+        const eliminatedIds = [...this.room.state.eliminatedPlayers].reverse();
+        for (const eliminatedId of eliminatedIds) {
+            results.push({
+                playerId: parseInt(eliminatedId),
+                place: place++,
+                isWinner: false
+            });
+        }
+
+        this.room.broadcast("gameFinished", { results });
+
+        // Очистка данных игры
+        for (const [_, player] of this.room.state.players) {
+            player.cards.clear();
+            player.revealedCards.clear();
+        }
+        this.room.state.eliminatedPlayers.clear();
+        this.room.state.scenario = new (require("../schema/bunker/SimpleScenario").SimpleScenario)();
+    }
+
+    public cleanup() {
+        if (this.cardRevealTimer) {
+            this.cardRevealTimer.clear();
+            this.cardRevealTimer = null;
+        }
+        if (this.room.turnTimer) {
+            this.room.turnTimer.clear();
+            this.room.turnTimer = null;
+        }
+    }
+}

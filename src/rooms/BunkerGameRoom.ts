@@ -8,12 +8,16 @@ import { PlayerHandler } from "./handlers/PlayerHandler";
 import { RoomHandler } from "./handlers/RoomHandler";
 import { GameHandler } from "./handlers/GameHandler";
 import { GameUtils } from "./handlers/GameUtils";
+import { GameEngine } from "./handlers/GameEngine";
+
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     maxClients = 12;
     state = new BunkerGameRoomState();
 
     public turnTimer: Delayed | null = null;
+    public gameEngine: GameEngine;
+
 
     private playerHandler: PlayerHandler;
     private roomHandler: RoomHandler;
@@ -35,6 +39,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.playerHandler = new PlayerHandler(this);
         this.roomHandler = new RoomHandler(this);
         this.gameHandler = new GameHandler(this);
+        this.gameEngine = new GameEngine(this);
 
         if(options?.isPrivate){
             this.state.isPrivateRoom = true;
@@ -45,6 +50,11 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             if(parseInt(options?.playersCount) >= this.state.minPlayers && parseInt(options?.playersCount) <= this.state.maxPlayers){
                 cntPlayers = parseInt(options?.playersCount);
             }
+        }
+
+        // Настройка количества раундов для воздержания (можно сделать конфигурируемым)
+        if(options?.maxAbstainRounds && parseInt(options.maxAbstainRounds) >= 0) {
+            this.state.maxAbstainRounds = parseInt(options.maxAbstainRounds);
         }
 
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
@@ -63,7 +73,13 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('togglePrivateRoom', this.roomHandler.onTogglePrivate.bind(this.roomHandler));
         this.onMessage('changePlayersCount', this.roomHandler.onChangePlayersCount.bind(this.roomHandler));
         this.onMessage('ready', this.gameHandler.onReady.bind(this.gameHandler));
+
+        // Новые обработчики для игрового процесса
+        this.onMessage('revealCard', this.gameHandler.onRevealCard.bind(this.gameHandler));
+        this.onMessage('finishSpeaking', this.gameHandler.onFinishSpeaking.bind(this.gameHandler));
+        this.onMessage('vote', this.gameHandler.onVote.bind(this.gameHandler));
     }
+
 
     public updateMetadata = () => {
         let availablePlaces = 0;
@@ -175,6 +191,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if(this.state.status == RoomStatus.PLAYING) {
             player.isConnected = false;
             this.broadcast("playerDisconnected", { playerId: player.id });
+
+            // Если отключившийся игрок сейчас говорит, обрабатываем это в игровом движке
+            if (player.id.toString() === this.state.currentSpeakerId && this.gameEngine) {
+                // GameEngine сам обработает отключение игрока во время его хода
+            }
+
             return;
         }
 
@@ -199,14 +221,21 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     onDispose() {
         this.turnTimer?.clear();
         this.turnTimer = null;
+
+        if (this.gameEngine) {
+            this.gameEngine.cleanup();
+        }
     }
+
 
     public replacePlayersPlaces = () => {
         GameUtils.replacePlayersPlaces(this);
     }
 
     public startGame = () => {
-        // Логика старта игры будет здесь
+        if (this.gameEngine) {
+            this.gameEngine.startGame();
+        }
     }
 
     public gameInit = async () => {
