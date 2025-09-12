@@ -113,13 +113,13 @@ export class GameEngine {
         }
 
         // Проверяем, что карта принадлежит игроку
-        const cardIndex = player.cards.findIndex(card => card.id === cardId);
+        const cardIndex = player.cards.findIndex(card => card.id == cardId);
         if (cardIndex === -1) {
             return false;
         }
 
         // Проверяем, что карта еще не открыта
-        const isAlreadyRevealed = player.revealedCards.some(card => card.id === cardId);
+        const isAlreadyRevealed = player.revealedCards.some(card => card.id == cardId);
         if (isAlreadyRevealed) {
             return false;
         }
