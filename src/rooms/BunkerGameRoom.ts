@@ -282,7 +282,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                     if(player?.id){
 
                         player.cards.clear();
-                        player.age = 0;
 
                         for (const type of scenario.getAllCardTypes()) {
                             if(type == 'cardsAge'){
@@ -291,12 +290,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                                 const filtered = cards.filter(card => {
                                     return (card.customData?.from || 20) <= age && (card.customData?.to || 20) >= age;
                                 });
-                                player.age = age;
+
                                 if(filtered.length > 0){
                                     const customData = new CardCustomData();
                                     customData.from = filtered[0].customData.from;
                                     customData.to = filtered[0].customData.to;
-                                    customData.value = filtered[0].customData.value;
+                                    customData.value = age;
 
                                     const card = new Card(
                                         filtered[0].id,
@@ -316,7 +315,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
                             // Фильтрация по полу (ищем подходящие изображения)
                             const filtered = cards.filter(card => {
-                                return isMale ? !!card.maleImageUrl : !!card.femaleImageUrl;
+                                return card.active && (isMale ? !!card.maleImageUrl : !!card.femaleImageUrl);
                             });
 
                             // Убираем уже использованные карты

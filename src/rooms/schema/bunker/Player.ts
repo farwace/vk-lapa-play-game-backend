@@ -24,9 +24,6 @@ export class Player extends Schema {
     @type("string") avatar: string = '';
     @type("string") name: string = '';
 
-
-    @view() @type("number") age: number = 0; // возраст для карточки возраста
-    @type("number") playerAge: number = 0; // возраст для карточки возраста
     @type("number") votesAgainst: number = 0;
 
     constructor(sessionId:string, p: TUser) {

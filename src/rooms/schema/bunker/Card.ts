@@ -27,28 +27,4 @@ export class Card extends Schema {
     this.customData = customData;
   }
 
-  isActive(): boolean {
-      return this.active;
-  }
-
-  isValidForGender(isMale: boolean): boolean {
-    if (isMale) {
-      return !!this.maleImageUrl;
-    } else {
-      return !!this.femaleImageUrl;
-    }
-  }
-
-  isValidForAge(age: number): boolean {
-    if (this.type !== "cardsAge") return true;
-
-    const from = this.customData.from;
-    const to = this.customData.to;
-
-    if (from !== undefined && to !== undefined) {
-      return age >= from && age <= to;
-    }
-
-    return true;
-  }
 }
