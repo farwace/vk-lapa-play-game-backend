@@ -81,6 +81,7 @@ export class GameHandler extends BaseHandler {
 
         if(this.room.state.cardRevealTimeRemaining < 1){
             client.send('error', 'Только одну карту за раунд!');
+            return;
         }
 
         if (!this.room.gameEngine.revealCard(player.id.toString(), cardId)) {

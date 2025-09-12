@@ -1,7 +1,7 @@
 import { BunkerGameRoom } from "../BunkerGameRoom";
 import { GameStage, RoomStatus } from "../schema/bunker/BunkerGameRoomState";
 import { Player } from "../schema/bunker/Player";
-import { Card } from "../schema/bunker/Card";
+import {Card, CardCustomData} from "../schema/bunker/Card";
 
 export class GameEngine {
     private room: BunkerGameRoom;
@@ -126,6 +126,11 @@ export class GameEngine {
 
         // Копируем карту в открытые
         const card = player.cards[cardIndex];
+        const customData = new CardCustomData();
+        customData.from = card.customData?.from;
+        customData.to = card.customData?.to;
+        customData.value = card.customData?.value;
+
         const revealedCard = new Card(
             card.id,
             card.name,
@@ -133,7 +138,7 @@ export class GameEngine {
             card.active,
             card.maleImageUrl,
             card.femaleImageUrl,
-            card.customData
+            customData
         );
         revealedCard.isRevealed = true;
         player.revealedCards.push(revealedCard);
@@ -173,6 +178,11 @@ export class GameEngine {
         // Выбираем случайную карту
         const randomIndex = Math.floor(Math.random() * unrevealedCards.length);
         const cardToReveal = unrevealedCards[randomIndex];
+
+        const customData = new CardCustomData();
+        customData.from = cardToReveal.customData?.from;
+        customData.to = cardToReveal.customData?.to;
+        customData.value = cardToReveal.customData?.value;
 
         // Копируем карту в открытые
         const revealedCard = new Card(
