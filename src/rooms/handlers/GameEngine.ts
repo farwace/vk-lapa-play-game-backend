@@ -469,7 +469,7 @@ export class GameEngine {
             this.endGame(remainingPlayers);
         } else {
             // Продолжаем игру
-            this.room.state.currentRound++;
+            this.room.state.currentRound = this.room.state.currentRound +1;
             this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
             this.startGame();
         }
