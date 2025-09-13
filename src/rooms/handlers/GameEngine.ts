@@ -15,7 +15,6 @@ export class GameEngine {
 
     public startGame() {
         this.room.state.gameStage = GameStage.CARD_REVEAL;
-        this.room.state.currentRound = 1;
         this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
 
         // Создаем очередь активных игроков (не исключенных)
@@ -420,18 +419,43 @@ export class GameEngine {
             round: this.room.state.currentRound
         });
 
+        this.processElimination(eliminatedPlayerId);
+
         this.room.turnTimer = this.room.clock.setInterval(() => {
             this.room.state.turnTimeRemaining--;
 
             if (this.room.state.turnTimeRemaining <= 0) {
                 this.room.turnTimer?.clear();
                 this.room.turnTimer = null;
-                this.processEliminationAndContinue(eliminatedPlayerId);
+                this.continueGame();
             }
         }, 1000);
     }
 
-    private processEliminationAndContinue(eliminatedPlayerId: string | null) {
+    private continueGame() {
+        // Подсчитываем оставшихся игроков
+        const remainingPlayers = [];
+        for (const [place, playerId] of this.room.state.places) {
+            if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
+                const player = this.room.state.players.get(playerId.toString());
+                if (player && !player.isEliminated) {
+                    remainingPlayers.push(player);
+                }
+            }
+        }
+
+        if (remainingPlayers.length <= 2) {
+            // Игра окончена
+            this.endGame(remainingPlayers);
+        } else {
+            // Продолжаем игру
+            this.room.state.currentRound = this.room.state.currentRound +1;
+            this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
+            this.startGame();
+        }
+    }
+
+    private processElimination(eliminatedPlayerId: string | null) {
         if (eliminatedPlayerId) {
             const eliminatedPlayer = this.room.state.players.get(eliminatedPlayerId);
             if (eliminatedPlayer) {
@@ -457,27 +481,6 @@ export class GameEngine {
                     }
                 }
             }
-        }
-
-        // Подсчитываем оставшихся игроков
-        const remainingPlayers = [];
-        for (const [place, playerId] of this.room.state.places) {
-            if (parseInt(place) < this.room.state.playersCount && playerId > 0) {
-                const player = this.room.state.players.get(playerId.toString());
-                if (player && !player.isEliminated) {
-                    remainingPlayers.push(player);
-                }
-            }
-        }
-
-        if (remainingPlayers.length <= 2) {
-            // Игра окончена
-            this.endGame(remainingPlayers);
-        } else {
-            // Продолжаем игру
-            this.room.state.currentRound = this.room.state.currentRound +1;
-            this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
-            this.startGame();
         }
     }
 

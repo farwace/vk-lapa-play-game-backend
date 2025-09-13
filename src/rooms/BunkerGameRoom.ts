@@ -52,11 +52,6 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             }
         }
 
-        // Настройка количества раундов для воздержания (можно сделать конфигурируемым)
-        if(options?.maxAbstainRounds && parseInt(options.maxAbstainRounds) >= 0) {
-            this.state.maxAbstainRounds = parseInt(options.maxAbstainRounds);
-        }
-
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
         this.state.playersCount = cntPlayers;
 
@@ -233,7 +228,20 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     }
 
     public startGame = () => {
+        let playersCount = 0;
+        for (const [index, placePlayerId] of this.state.places) {
+            if (placePlayerId != 0) {
+                playersCount+=1;
+            }
+        }
+        let abstainRounds = Math.abs(this.state.maxPlayers - playersCount) +1;
+        if(abstainRounds > 4){
+            abstainRounds = 4;
+        }
+        this.state.maxAbstainRounds = abstainRounds;
+
         if (this.gameEngine) {
+            this.state.currentRound = 1;
             this.gameEngine.startGame();
         }
     }
