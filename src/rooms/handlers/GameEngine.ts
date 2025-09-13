@@ -241,10 +241,10 @@ export class GameEngine {
     }
 
     private startVoting() {
+        this.room.state.currentVotes.clear();
         this.room.state.gameStage = GameStage.VOTING;
         this.room.state.currentSpeakerId = "";
         this.room.state.turnTimeRemaining = 30; // 30 секунд на голосование
-        this.room.state.currentVotes.clear();
 
         // Сбрасываем голоса всех игроков
         for (const [_, player] of this.room.state.players) {
@@ -436,6 +436,7 @@ export class GameEngine {
             if (this.room.state.turnTimeRemaining <= 0) {
                 this.room.turnTimer?.clear();
                 this.room.turnTimer = null;
+                this.room.state.currentVotes.clear();
                 this.continueGame();
             }
         }, 1000);
