@@ -348,7 +348,16 @@ export class GameEngine {
                 this.room.turnTimer.clear();
                 this.room.turnTimer = null;
             }
-            this.finishVoting();
+            this.room.state.turnTimeRemaining = 3;
+            this.room.turnTimer = this.room.clock.setInterval(() => {
+                this.room.state.turnTimeRemaining--;
+
+                if (this.room.state.turnTimeRemaining <= 0) {
+                    this.room.turnTimer?.clear();
+                    this.room.turnTimer = null;
+                    this.finishVoting();
+                }
+            }, 1000);
         }
     }
 
@@ -515,9 +524,22 @@ export class GameEngine {
         for (const [_, player] of this.room.state.players) {
             player.cards.clear();
             player.revealedCards.clear();
+            player.isEliminated = false;
+            player.isReady = false;
         }
         this.room.state.eliminatedPlayers.clear();
         this.room.state.scenario = new (require("../schema/bunker/SimpleScenario").SimpleScenario)();
+
+        this.room.state.turnTimeRemaining = 10;
+        this.room.turnTimer = this.room.clock.setInterval(() => {
+            this.room.state.turnTimeRemaining--;
+
+            if (this.room.state.turnTimeRemaining <= 0) {
+                this.room.turnTimer.clear();
+                this.room.turnTimer = null;
+                this.room.state.status = RoomStatus.WAITING;
+            }
+        }, 1000);
     }
 
     public cleanup() {
