@@ -93,7 +93,8 @@ export class GameUtils {
                                         filtered[0].active,
                                         filtered[0].maleImageUrl,
                                         filtered[0].femaleImageUrl,
-                                        customData
+                                        customData,
+                                        age
                                     );
                                     player.cards.push(card);
                                 }

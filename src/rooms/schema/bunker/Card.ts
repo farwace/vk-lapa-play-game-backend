@@ -15,8 +15,9 @@ export class Card extends Schema {
   @type("string") femaleImageUrl: string = "";
   @type(CardCustomData) customData = new CardCustomData();
   @type("boolean") isRevealed: boolean = false;
+  @type("number") value: number = 0;
 
-  constructor(id: string, name: string, type: string, active:boolean = true, maleImageUrl: string = "", femaleImageUrl: string = "", customData: CardCustomData = new CardCustomData()) {
+  constructor(id: string, name: string, type: string, active:boolean = true, maleImageUrl: string = "", femaleImageUrl: string = "", customData: CardCustomData = new CardCustomData(), value: number = 0) {
     super();
     this.id = id;
     this.name = name;
@@ -25,6 +26,7 @@ export class Card extends Schema {
     this.maleImageUrl = maleImageUrl;
     this.femaleImageUrl = femaleImageUrl;
     this.customData = customData;
+    this.value = value || 0;
   }
 
 }

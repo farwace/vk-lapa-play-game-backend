@@ -126,10 +126,6 @@ export class GameEngine {
 
         // Копируем карту в открытые
         const card = player.cards[cardIndex];
-        const customData = new CardCustomData();
-        customData.from = card.customData?.from;
-        customData.to = card.customData?.to;
-        customData.value = card.customData?.value;
 
         const revealedCard = new Card(
             card.id,
@@ -138,7 +134,8 @@ export class GameEngine {
             card.active,
             card.maleImageUrl,
             card.femaleImageUrl,
-            customData
+            card.customData,
+            card.value
         );
         revealedCard.isRevealed = true;
         player.revealedCards.push(revealedCard);
@@ -179,11 +176,6 @@ export class GameEngine {
         const randomIndex = Math.floor(Math.random() * unrevealedCards.length);
         const cardToReveal = unrevealedCards[randomIndex];
 
-        const customData = new CardCustomData();
-        customData.from = cardToReveal.customData?.from;
-        customData.to = cardToReveal.customData?.to;
-        customData.value = cardToReveal.customData?.value;
-
         // Копируем карту в открытые
         const revealedCard = new Card(
             cardToReveal.id,
@@ -192,7 +184,8 @@ export class GameEngine {
             cardToReveal.active,
             cardToReveal.maleImageUrl,
             cardToReveal.femaleImageUrl,
-            cardToReveal.customData
+            cardToReveal.customData,
+            cardToReveal.value
         );
         revealedCard.isRevealed = true;
         player.revealedCards.push(revealedCard);
@@ -454,7 +447,8 @@ export class GameEngine {
                             card.active,
                             card.maleImageUrl,
                             card.femaleImageUrl,
-                            card.customData
+                            card.customData,
+                            card.value
                         );
                         revealedCard.isRevealed = true;
                         eliminatedPlayer.revealedCards.push(revealedCard);
