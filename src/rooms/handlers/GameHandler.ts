@@ -101,6 +101,11 @@ export class GameHandler extends BaseHandler {
             return;
         }
 
+        if(this.room.state.cardRevealTimeRemaining > 0){
+            client.send('error', 'Покажите карту');
+            return;
+        }
+
         if (!this.room.gameEngine.finishSpeaking(player.id.toString())) {
             client.send('error', 'Не удалось завершить речь');
         }
@@ -119,7 +124,7 @@ export class GameHandler extends BaseHandler {
         }
 
         // Проверяем, что можно воздержаться, если targetId === "0"
-        if (targetId === "0" && !this.room.state.canAbstainThisRound) {
+        if (targetId == "0" && !this.room.state.canAbstainThisRound) {
             client.send('error', 'В этом раунде нельзя воздержаться от голосования');
             return;
         }

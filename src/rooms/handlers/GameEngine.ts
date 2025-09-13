@@ -270,6 +270,8 @@ export class GameEngine {
     }
 
     public vote(voterId: string, targetId: string): boolean {
+        targetId = (+targetId).toString();
+
         if (this.room.state.gameStage !== GameStage.VOTING) {
             return false;
         }
@@ -293,7 +295,7 @@ export class GameEngine {
         }
 
         // Проверяем воздержание
-        if (targetId === "0") {
+        if (targetId == "0") {
             if (!this.room.state.canAbstainThisRound) {
                 return false; // Нельзя воздержаться в этом раунде
             }
