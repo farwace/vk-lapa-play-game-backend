@@ -117,14 +117,14 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }, 1000);
     }
 
-    private onRequestVoiceToken = (client: Client) => {
+    private onRequestVoiceToken = async (client: Client) => {
         const player = this.findPlayerByClientSessionId(client.sessionId);
         if (!player) {
             client.send('error', 'Игрок не найден');
             return;
         }
 
-        const token = this.voiceHandler.generateVoiceToken(
+        const token = await this.voiceHandler.generateVoiceToken(
             player.id.toString(),
             player.name
         );
@@ -189,7 +189,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
 
         // Отправляем голосовой токен новому игроку
-        const voiceToken = this.voiceHandler.generateVoiceToken(
+        const voiceToken = await this.voiceHandler.generateVoiceToken(
             player.id.toString(),
             player.name
         );

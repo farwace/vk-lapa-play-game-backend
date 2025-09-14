@@ -10,7 +10,7 @@ export class VoiceHandler extends BaseHandler {
         try {
             const voiceRoom = await LiveKitService.createVoiceRoom(this.room.roomId);
             this.room.state.voiceRoomId = `voice-${this.room.roomId}`;
-            console.log(`Voice room created: ${this.room.state.voiceRoomId}`);
+            //console.log(`Voice room created: ${this.room.state.voiceRoomId}`);
         } catch (error) {
             console.error('Failed to create voice room:', error);
         }
@@ -119,7 +119,7 @@ export class VoiceHandler extends BaseHandler {
         if (this.room.state.voiceRoomId) {
             try {
                 await LiveKitService.deleteVoiceRoom(this.room.roomId);
-                console.log(`Voice room deleted: ${this.room.state.voiceRoomId}`);
+                //console.log(`Voice room deleted: ${this.room.state.voiceRoomId}`);
             } catch (error) {
                 console.error('Failed to delete voice room:', error);
             }
