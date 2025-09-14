@@ -57,8 +57,12 @@ export class VoiceHandler extends BaseHandler {
         }
 
         // Если указан конкретный говорящий, только он может говорить
-        if (this.room.state.currentSpeakerId && this.room.state.currentSpeakerId !== "0") {
-            return this.room.state.currentSpeakerId === playerId;
+        if (
+            this.room.state.currentSpeakerId &&
+            this.room.state.currentSpeakerId !== "" &&
+            this.room.state.currentSpeakerId !== "0"
+        ) {
+            return this.room.state.currentSpeakerId == playerId;
         }
 
         // В остальных случаях все активные игроки могут говорить
@@ -75,7 +79,7 @@ export class VoiceHandler extends BaseHandler {
 
         for (const [playerId, player] of this.room.state.players) {
             if (player.isConnected) {
-                const canSpeak = this.canPlayerSpeak(playerId);
+                const canSpeak = this.canPlayerSpeak(playerId) || true;
                 await this.updateParticipantPermissions(playerId, canSpeak);
             }
         }
