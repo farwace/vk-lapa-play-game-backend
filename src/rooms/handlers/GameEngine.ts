@@ -57,7 +57,7 @@ export class GameEngine {
 
         this.room.state.currentSpeakerId = currentPlayerId.toString();
         this.room.state.turnTimeRemaining = this.room.state.turnTimeLimit;
-        this.room.state.cardRevealTimeRemaining = 10; // 10 секунд на выбор карты
+        this.room.state.cardRevealTimeRemaining = 15; // 10 секунд на выбор карты
 
         // Если игрок отключен, сразу открываем случайную карту и переходим к следующему через 3 секунды
         if (!currentPlayer.isConnected) {
