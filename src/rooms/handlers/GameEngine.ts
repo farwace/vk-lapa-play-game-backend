@@ -40,7 +40,7 @@ export class GameEngine {
         }
     }
 
-    private startPlayerTurn() {
+    private async startPlayerTurn() {
         if (this.currentPlayerIndex >= this.speakingPlayerQueue.length) {
             // Все игроки высказались, переходим к голосованию
             this.startVoting();
@@ -57,7 +57,11 @@ export class GameEngine {
 
         this.room.state.currentSpeakerId = currentPlayerId.toString();
         this.room.state.turnTimeRemaining = this.room.state.turnTimeLimit;
-        this.room.state.cardRevealTimeRemaining = 15; // 10 секунд на выбор карты
+        this.room.state.cardRevealTimeRemaining = 15;
+
+        // Обновляем голосовые разрешения
+        await this.room.voiceHandler.updateAllParticipantsPermissions();
+        this.room.voiceHandler.broadcastVoiceStatus();
 
         // Если игрок отключен, сразу открываем случайную карту и переходим к следующему через 3 секунды
         if (!currentPlayer.isConnected) {
@@ -74,7 +78,7 @@ export class GameEngine {
             cardRevealTime: this.room.state.cardRevealTimeRemaining
         });
 
-        // Запускаем таймер для карты (10 секунд)
+        // Запускаем таймер для карты (15 секунд)
         this.startCardRevealTimer(currentPlayer);
 
         // Запускаем общий таймер хода (30 секунд)
@@ -230,7 +234,7 @@ export class GameEngine {
         return true;
     }
 
-    private nextPlayer() {
+    private async nextPlayer() {
         this.currentPlayerIndex++;
 
         if (this.currentPlayerIndex >= this.speakingPlayerQueue.length) {
@@ -240,11 +244,15 @@ export class GameEngine {
         }
     }
 
-    private startVoting() {
+    private async startVoting() {
         this.room.state.currentVotes.clear();
         this.room.state.gameStage = GameStage.VOTING;
         this.room.state.currentSpeakerId = "";
         this.room.state.turnTimeRemaining = 30; // 30 секунд на голосование
+
+        await this.room.voiceHandler.updateAllParticipantsPermissions();
+        this.room.voiceHandler.broadcastVoiceStatus();
+
 
         // Сбрасываем голоса всех игроков
         for (const [_, player] of this.room.state.players) {

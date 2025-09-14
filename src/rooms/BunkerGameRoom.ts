@@ -9,6 +9,7 @@ import { RoomHandler } from "./handlers/RoomHandler";
 import { GameHandler } from "./handlers/GameHandler";
 import { GameUtils } from "./handlers/GameUtils";
 import { GameEngine } from "./handlers/GameEngine";
+import { VoiceHandler } from "./handlers/VoiceHandler";
 
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
@@ -17,6 +18,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     public turnTimer: Delayed | null = null;
     public gameEngine: GameEngine;
+    public voiceHandler: VoiceHandler;
 
 
     private playerHandler: PlayerHandler;
@@ -40,6 +42,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.roomHandler = new RoomHandler(this);
         this.gameHandler = new GameHandler(this);
         this.gameEngine = new GameEngine(this);
+        this.voiceHandler = new VoiceHandler(this);
+
+        await this.voiceHandler.createVoiceRoom();
 
         if(options?.isPrivate){
             this.state.isPrivateRoom = true;
@@ -73,6 +78,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('revealCard', this.gameHandler.onRevealCard.bind(this.gameHandler));
         this.onMessage('finishSpeaking', this.gameHandler.onFinishSpeaking.bind(this.gameHandler));
         this.onMessage('vote', this.gameHandler.onVote.bind(this.gameHandler));
+
+        this.onMessage('requestVoiceToken', this.onRequestVoiceToken.bind(this));
     }
 
 
@@ -108,6 +115,29 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 callback?.(args);
             }
         }, 1000);
+    }
+
+    private onRequestVoiceToken = (client: Client) => {
+        const player = this.findPlayerByClientSessionId(client.sessionId);
+        if (!player) {
+            client.send('error', 'Игрок не найден');
+            return;
+        }
+
+        const token = this.voiceHandler.generateVoiceToken(
+            player.id.toString(),
+            player.name
+        );
+
+        if (token) {
+            client.send('voiceToken', {
+                token: token,
+                roomName: this.state.voiceRoomId,
+                canSpeak: this.voiceHandler.canPlayerSpeak(player.id.toString())
+            });
+        } else {
+            client.send('error', 'Не удалось сгенерировать голосовой токен');
+        }
     }
 
     async onJoin(client: Client, options: any) {
@@ -157,6 +187,23 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         client.view.add(player);
 
         this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
+
+        // Отправляем голосовой токен новому игроку
+        const voiceToken = this.voiceHandler.generateVoiceToken(
+            player.id.toString(),
+            player.name
+        );
+
+        if (voiceToken) {
+            client.send('voiceToken', {
+                token: voiceToken,
+                roomName: this.state.voiceRoomId,
+                canSpeak: this.voiceHandler.canPlayerSpeak(player.id.toString())
+            });
+        }
+
+        // Обновляем статус голоса для всех
+        this.voiceHandler.broadcastVoiceStatus();
     }
 
     public findPlayerByClientSessionId(sessionId: string): Player | undefined {
@@ -187,10 +234,17 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             player.isConnected = false;
             this.broadcast("playerDisconnected", { playerId: player.id });
 
+            // Отключаем игрока от голосовой комнаты
+            this.voiceHandler.disconnectPlayerFromVoice(player.id.toString());
+
             // Если отключившийся игрок сейчас говорит, обрабатываем это в игровом движке
             if (player.id.toString() === this.state.currentSpeakerId && this.gameEngine) {
                 // GameEngine сам обработает отключение игрока во время его хода
             }
+
+            // Обновляем голосовые разрешения
+            this.voiceHandler.updateAllParticipantsPermissions();
+            this.voiceHandler.broadcastVoiceStatus();
 
             return;
         }
@@ -211,14 +265,22 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         this.updateMetadata();
         this.broadcast("playerLeft", { playerId: player.id });
+
+        // Обновляем голосовые разрешения
+        this.voiceHandler.broadcastVoiceStatus();
     }
 
-    onDispose() {
+    async onDispose() {
         this.turnTimer?.clear();
         this.turnTimer = null;
 
         if (this.gameEngine) {
             this.gameEngine.cleanup();
+        }
+
+        // Удаляем голосовую комнату
+        if (this.voiceHandler) {
+            await this.voiceHandler.deleteVoiceRoom();
         }
     }
 
