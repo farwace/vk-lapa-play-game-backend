@@ -79,7 +79,7 @@ export class VoiceHandler extends BaseHandler {
 
         for (const [playerId, player] of this.room.state.players) {
             if (player.isConnected) {
-                const canSpeak = this.canPlayerSpeak(playerId) || true;
+                const canSpeak = this.canPlayerSpeak(playerId);
                 await this.updateParticipantPermissions(playerId, canSpeak);
             }
         }
