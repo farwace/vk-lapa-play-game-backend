@@ -38,7 +38,6 @@ export class VoiceHandler extends BaseHandler {
      * Определяет, может ли игрок говорить в данный момент
      */
     canPlayerSpeak(playerId: string): boolean {
-        return true;
         const player = this.room.state.players.get(playerId);
         if (!player || player.isEliminated || !player.isConnected) {
             return false;
