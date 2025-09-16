@@ -1,6 +1,6 @@
 import { BaseHandler } from "./BaseHandler";
 import LiveKitService from "../../services/LiveKitService";
-import { GameStage } from "../schema/bunker/BunkerGameRoomState";
+import ConsoleService from "../../services/ConsoleService";
 
 export class VoiceHandler extends BaseHandler {
     /**
@@ -10,9 +10,9 @@ export class VoiceHandler extends BaseHandler {
         try {
             const voiceRoom = await LiveKitService.createVoiceRoom(this.room.roomId);
             this.room.state.voiceRoomId = `voice-${this.room.roomId}`;
-            //console.log(`Voice room created: ${this.room.state.voiceRoomId}`);
+            //ConsoleService.log(`Voice room created: ${this.room.state.voiceRoomId}`);
         } catch (error) {
-            console.error('Failed to create voice room:', error);
+            ConsoleService.error('Failed to create voice room:', error);
         }
     }
 
@@ -29,7 +29,7 @@ export class VoiceHandler extends BaseHandler {
                 canSpeak
             );
         } catch (error) {
-            console.error('Failed to generate voice token:', error);
+            ConsoleService.error('Failed to generate voice token:', error);
             return null;
         }
     }
@@ -96,7 +96,7 @@ export class VoiceHandler extends BaseHandler {
                 canSpeak
             );
         } catch (error) {
-            console.error(`Failed to update permissions for player ${playerId}:`, error);
+            ConsoleService.error(`Failed to update permissions for player ${playerId}:`, error);
         }
     }
 
@@ -123,9 +123,9 @@ export class VoiceHandler extends BaseHandler {
         if (this.room.state.voiceRoomId) {
             try {
                 await LiveKitService.deleteVoiceRoom(this.room.roomId);
-                //console.log(`Voice room deleted: ${this.room.state.voiceRoomId}`);
+                //ConsoleService.log(`Voice room deleted: ${this.room.state.voiceRoomId}`);
             } catch (error) {
-                console.error('Failed to delete voice room:', error);
+                ConsoleService.error('Failed to delete voice room:', error);
             }
         }
     }
@@ -137,7 +137,7 @@ export class VoiceHandler extends BaseHandler {
         try {
             await LiveKitService.disconnectParticipant(this.room.roomId, playerId);
         } catch (error) {
-            console.error(`Failed to disconnect player ${playerId} from voice:`, error);
+            ConsoleService.error(`Failed to disconnect player ${playerId} from voice:`, error);
         }
     }
 }

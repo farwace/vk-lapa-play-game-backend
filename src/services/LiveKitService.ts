@@ -1,4 +1,5 @@
 import { AccessToken, RoomServiceClient, Room as LiveKitRoom } from 'livekit-server-sdk';
+import ConsoleService from "./ConsoleService";
 
 class LiveKitService {
     private roomService: RoomServiceClient;
@@ -30,7 +31,7 @@ class LiveKitService {
             });
             return room;
         } catch (error) {
-            console.error('Failed to create LiveKit room:', error);
+            ConsoleService.error('Failed to create LiveKit room:', error);
             throw error;
         }
     }
@@ -70,9 +71,11 @@ class LiveKitService {
     ): Promise<void> {
         try {
             const participant = await this.roomService.getParticipant(`voice-${roomId}`, playerId);
-            participant.tracks.forEach((track) => {
-                this.roomService.mutePublishedTrack(`voice-${roomId}`, playerId, track.sid, !canSpeak);
-            });
+            if(participant){
+                participant.tracks.forEach((track) => {
+                    this.roomService.mutePublishedTrack(`voice-${roomId}`, playerId, track.sid, !canSpeak);
+                });
+            }
 
             // await this.roomService.updateParticipant(`voice-${roomId}`, playerId, {
             //     permission: {
@@ -82,7 +85,7 @@ class LiveKitService {
             //     }
             // });
         } catch (error) {
-            console.error('Failed to update participant permissions:', error);
+            ConsoleService.error('Failed to update participant permissions:', error);
             // Не бросаем ошибку, так как участник может еще не подключиться
         }
     }
@@ -94,7 +97,7 @@ class LiveKitService {
         try {
             await this.roomService.deleteRoom(`voice-${roomId}`);
         } catch (error) {
-            console.error('Failed to delete LiveKit room:', error);
+            ConsoleService.error('Failed to delete LiveKit room:', error);
         }
     }
 
@@ -106,7 +109,7 @@ class LiveKitService {
             const participants = await this.roomService.listParticipants(`voice-${roomId}`);
             return participants;
         } catch (error) {
-            console.error('Failed to get room participants:', error);
+            ConsoleService.error('Failed to get room participants:', error);
             return [];
         }
     }
@@ -118,7 +121,7 @@ class LiveKitService {
         try {
             await this.roomService.removeParticipant(`voice-${roomId}`, playerId);
         } catch (error) {
-            console.error('Failed to disconnect participant:', error);
+            ConsoleService.error('Failed to disconnect participant:', error);
         }
     }
 }

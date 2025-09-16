@@ -2,6 +2,7 @@ import axios, {AxiosResponse} from 'axios';
 import {Card, CardCustomData} from '../rooms/schema/bunker/Card';
 import { Scenario } from '../rooms/schema/bunker/Scenario';
 import {TEcosystemResponse, TScenarioResponse, TUser} from "../rooms/schema/bunker/types";
+import ConsoleService from "./ConsoleService";
 
 export class ApiService {
     private baseUrl: string;
@@ -25,7 +26,7 @@ export class ApiService {
             return res.data.data;
         }
         catch (error: any) {
-            console.log(error);
+            ConsoleService.log(error);
             return undefined;
         }
   }
@@ -66,7 +67,7 @@ export class ApiService {
 
             return scenario;
         } catch (error) {
-            console.error("Ошибка при получении сценария:", error);
+            ConsoleService.error("Ошибка при получении сценария:", error);
             throw error;
         }
     }
