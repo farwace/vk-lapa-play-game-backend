@@ -69,13 +69,18 @@ class LiveKitService {
         canSpeak: boolean
     ): Promise<void> {
         try {
-            await this.roomService.updateParticipant(`voice-${roomId}`, playerId, {
-                permission: {
-                    canPublish: canSpeak,
-                    canSubscribe: true,
-                    canPublishData: true,
-                }
+            const participant = await this.roomService.getParticipant(`voice-${roomId}`, playerId);
+            participant.tracks.forEach((track) => {
+                this.roomService.mutePublishedTrack(`voice-${roomId}`, playerId, track.sid, !canSpeak);
             });
+
+            // await this.roomService.updateParticipant(`voice-${roomId}`, playerId, {
+            //     permission: {
+            //         canPublish: canSpeak,
+            //         canSubscribe: true,
+            //         canPublishData: true,
+            //     }
+            // });
         } catch (error) {
             console.error('Failed to update participant permissions:', error);
             // Не бросаем ошибку, так как участник может еще не подключиться
