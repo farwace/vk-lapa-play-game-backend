@@ -155,9 +155,29 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
         let placed = false;
-        if (this.state.status === RoomStatus.WAITING) {
+        let existingSeatIndex: string | null = null;
+
+        // Ensure the player is not occupying multiple seats
+        for (const [index, pid] of this.state.places) {
+            if (pid == player.id) {
+                if (existingSeatIndex === null && (+index < this.state.playersCount)) {
+                    existingSeatIndex = index;
+                    placed = true;
+                } else {
+                    this.state.places.set(index, 0);
+                }
+            }
+        }
+
+        if (existingSeatIndex !== null && +existingSeatIndex >= this.state.playersCount) {
+            this.state.places.set(existingSeatIndex, 0);
+            placed = false;
+            existingSeatIndex = null;
+        }
+
+        if (!placed && this.state.status === RoomStatus.WAITING) {
             for (const [index, pid] of this.state.places) {
-                if (!pid) {
+                if (!pid && (+index < this.state.playersCount)) {
                     this.state.places.set(index, player.id);
                     placed = true;
                     break;
