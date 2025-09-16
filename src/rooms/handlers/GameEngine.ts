@@ -480,6 +480,8 @@ export class GameEngine {
                 eliminatedPlayer.isEliminated = true;
                 this.room.state.eliminatedPlayers.push(eliminatedPlayerId);
 
+                this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+
                 // Открываем все карты исключенного игрока
                 for (const card of eliminatedPlayer.cards) {
                     const isAlreadyRevealed = eliminatedPlayer.revealedCards.some(revealed => revealed.id === card.id);
@@ -528,16 +530,28 @@ export class GameEngine {
         }
 
         this.room.broadcast("gameFinished", { results });
-
         // Очистка данных игры
-        for (const [_, player] of this.room.state.players) {
+        for (const [playerId, player] of this.room.state.players) {
             player.cards.clear();
             player.revealedCards.clear();
             player.isEliminated = false;
             player.isReady = false;
+
+            if(!player.isConnected){
+                this.room.state.players.delete(playerId);
+                for (const [place, placedPlayerId] of this.room.state.places) {
+                    if(playerId == placedPlayerId.toString()){
+                        this.room.state.places.set(place, 0);
+                    }
+                }
+            }
         }
+
         this.room.state.eliminatedPlayers.clear();
         this.room.state.scenario = new (require("../schema/bunker/SimpleScenario").SimpleScenario)();
+
+        this.room.voiceHandler.updateAllParticipantsPermissions();
+        this.room.voiceHandler.broadcastVoiceStatus();
 
         this.room.state.turnTimeRemaining = 10;
         this.room.turnTimer = this.room.clock.setInterval(() => {
