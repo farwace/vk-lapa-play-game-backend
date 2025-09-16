@@ -73,16 +73,16 @@ export class VoiceHandler extends BaseHandler {
      * Обновляет разрешения для всех участников голосовой комнаты
      */
     async updateAllParticipantsPermissions(): Promise<void> {
-        if (!this.room.state.voiceRoomId) {
-            return;
-        }
-
-        for (const [playerId, player] of this.room.state.players) {
-            if (player.isConnected) {
-                const canSpeak = this.canPlayerSpeak(playerId);
-                await this.updateParticipantPermissions(playerId, canSpeak);
-            }
-        }
+        // if (!this.room.state.voiceRoomId) {
+        //     return;
+        // }
+        //
+        // for (const [playerId, player] of this.room.state.players) {
+        //     if (player.isConnected) {
+        //         const canSpeak = this.canPlayerSpeak(playerId);
+        //         await this.updateParticipantPermissions(playerId, canSpeak);
+        //     }
+        // }
     }
 
     /**

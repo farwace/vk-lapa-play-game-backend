@@ -68,6 +68,7 @@ class LiveKitService {
         playerId: string,
         canSpeak: boolean
     ): Promise<void> {
+        console.log('>>> ', playerId, !!canSpeak);
         try {
             await this.roomService.updateParticipant(`voice-${roomId}`, playerId, {
                 permission: {
