@@ -80,6 +80,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('vote', this.gameHandler.onVote.bind(this.gameHandler));
 
         this.onMessage('requestVoiceToken', this.onRequestVoiceToken.bind(this));
+        this.onMessage('liveKitIdentity', this.onLiveKitIdentityMessage.bind(this));
     }
 
 
@@ -115,6 +116,15 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 callback?.(args);
             }
         }, 1000);
+    }
+
+    private onLiveKitIdentityMessage = (client: Client, identity: string | number) => {
+        const player = this.findPlayerByClientSessionId(client.sessionId);
+        if (!player) {
+            client.send('error', 'Игрок не найден');
+            return;
+        }
+        player.liveKitIdentity = identity.toString();
     }
 
     private onRequestVoiceToken = async (client: Client) => {

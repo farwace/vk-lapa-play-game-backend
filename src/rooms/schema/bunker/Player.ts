@@ -23,6 +23,7 @@ export class Player extends Schema {
     @type("boolean") isPremium: boolean = false;
     @type("string") avatar: string = '';
     @type("string") name: string = '';
+    @type("string") liveKitIdentity: string = '';
 
     @type("number") votesAgainst: number = 0;
 
