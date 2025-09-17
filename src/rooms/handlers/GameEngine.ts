@@ -2,6 +2,7 @@ import { BunkerGameRoom } from "../BunkerGameRoom";
 import { GameStage, RoomStatus } from "../schema/bunker/BunkerGameRoomState";
 import { Player } from "../schema/bunker/Player";
 import {Card, CardCustomData} from "../schema/bunker/Card";
+import ApiService from "../../services/ApiService";
 
 export class GameEngine {
     private room: BunkerGameRoom;
@@ -530,6 +531,11 @@ export class GameEngine {
         }
 
         this.room.broadcast("gameFinished", { results });
+        try {
+            ApiService.sendEndGame(this.room.roomId, results);
+        }
+        catch (e: any){}
+
         // Очистка данных игры
         for (const [playerId, player] of this.room.state.players) {
             player.cards.clear();

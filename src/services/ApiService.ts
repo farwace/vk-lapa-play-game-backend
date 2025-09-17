@@ -31,6 +31,44 @@ export class ApiService {
         }
   }
 
+  async sendStartGame(roomId: string, players: number[]): Promise<void> {
+        try{
+            await axios.post(
+                `${this.baseUrl}/api/v1.0/game/start`,
+                {
+                    'room_id': roomId,
+                    'players': players,
+                    'code': 'bunker'
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.API_SECRET}`,
+                        'Accept': 'application/json'
+                    }
+                })
+        }
+        catch (error: any) {}
+  }
+
+  async sendEndGame(roomId: string, results: any[]): Promise<void> {
+        try{
+            await axios.post(
+                `${this.baseUrl}/api/v1.0/game/complete`,
+                {
+                    'room_id': roomId,
+                    'results': results,
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.API_SECRET}`,
+                        'Accept': 'application/json'
+                    }
+                })
+        }
+        catch (error: any) {}
+  }
+
+
   // Получение случайного сценария с сервера
     async getRandomScenario(): Promise<Scenario> {
         try {

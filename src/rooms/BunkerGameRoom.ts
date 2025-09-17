@@ -311,9 +311,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     public startGame = () => {
         let playersCount = 0;
+        const playerIds = [];
+
         for (const [index, placePlayerId] of this.state.places) {
             if (placePlayerId != 0) {
                 playersCount+=1;
+                playerIds.push(placePlayerId);
             }
         }
         let abstainRounds = Math.abs(this.state.maxPlayers - playersCount) +1;
@@ -325,6 +328,11 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if (this.gameEngine) {
             this.state.currentRound = 1;
             this.gameEngine.startGame();
+
+            try {
+                ApiService.sendStartGame(this.roomId, playerIds);
+            }
+            catch (e: any){}
         }
     }
 
