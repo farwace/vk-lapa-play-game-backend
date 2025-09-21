@@ -293,7 +293,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     async onDispose() {
         this.turnTimer?.clear();
         this.turnTimer = null;
-
+        ApiService.sendEndGame(this.roomId, []);
         if (this.gameEngine) {
             this.gameEngine.cleanup();
         }
