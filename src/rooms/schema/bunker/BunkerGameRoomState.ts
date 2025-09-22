@@ -25,6 +25,7 @@ export class BunkerGameRoomState extends Schema {
 
     @type("string") currentSpeakerId: string = "";
     @type("string") voiceRoomId: string = ""; // ID голосовой комнаты в LiveKit
+    @type("string") customId: string = "";
 
     @type("number") minPlayers: number = 4;
     @type("number") maxPlayers: number = 8;

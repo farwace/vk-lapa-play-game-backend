@@ -1,5 +1,5 @@
 import {Client, Room} from "@colyseus/core";
-import {ArraySchema, StateView} from "@colyseus/schema";
+import {StateView} from "@colyseus/schema";
 import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
@@ -10,6 +10,8 @@ import { GameHandler } from "./handlers/GameHandler";
 import { GameUtils } from "./handlers/GameUtils";
 import { GameEngine } from "./handlers/GameEngine";
 import { VoiceHandler } from "./handlers/VoiceHandler";
+
+const CUSTOM_ID_REGISTRY_KEY = "bunker:rooms:customIds";
 
 
 export class BunkerGameRoom extends Room<BunkerGameRoomState> {
@@ -49,6 +51,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if(options?.isPrivate){
             this.state.isPrivateRoom = true;
         }
+        this.state.customId = await this.resolveCustomId(options?.customId);
+
         let cntPlayers = 8;
 
         if(options?.playersCount){
@@ -98,8 +102,31 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             availablePlaces: availablePlaces,
             status: this.state.status,
             isPrivate: this.state.isPrivateRoom,
-            canJoin: canJoin
+            canJoin: canJoin,
+            customId: this.state.customId
         }).then(() => updateLobby(this));
+    }
+
+    private async resolveCustomId(providedCustomId?: unknown): Promise<string> {
+        const providedAsString =
+            providedCustomId !== undefined && providedCustomId !== null
+                ? String(providedCustomId)
+                : "";
+        const requestedId = providedAsString.trim();
+
+        if (!requestedId) {
+            await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, this.roomId);
+            return this.roomId;
+        }
+
+        const isTaken = await this.presence.sismember(CUSTOM_ID_REGISTRY_KEY, requestedId);
+        if (!isTaken) {
+            await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, requestedId);
+            return requestedId;
+        }
+
+        await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, this.roomId);
+        return this.roomId;
     }
 
     private startTurnTimer(callback?:(args:any)=>void, args?: any) {
@@ -296,6 +323,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         ApiService.sendEndGame(this.roomId, []);
         if (this.gameEngine) {
             this.gameEngine.cleanup();
+        }
+
+        if (this.state.customId) {
+            await this.presence.srem(CUSTOM_ID_REGISTRY_KEY, this.state.customId);
         }
 
         // Удаляем голосовую комнату
