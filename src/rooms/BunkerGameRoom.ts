@@ -3,6 +3,7 @@ import {StateView} from "@colyseus/schema";
 import {BunkerGameRoomState, RoomStatus} from "./schema/bunker/BunkerGameRoomState";
 import {Delayed, updateLobby} from "colyseus";
 import ApiService from "../services/ApiService";
+import ConsoleService from "../services/ConsoleService";
 import {Player} from "./schema/bunker/Player";
 import { PlayerHandler } from "./handlers/PlayerHandler";
 import { RoomHandler } from "./handlers/RoomHandler";
@@ -19,6 +20,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     state = new BunkerGameRoomState();
 
     public turnTimer: Delayed | null = null;
+    private emptyRoomDisposeTimer: Delayed | null = null;
     public gameEngine: GameEngine;
     public voiceHandler: VoiceHandler;
 
@@ -26,6 +28,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     private playerHandler: PlayerHandler;
     private roomHandler: RoomHandler;
     private gameHandler: GameHandler;
+
+    private static readonly EMPTY_ROOM_DISPOSE_DELAY_MS = 30_000;
 
     private allCardTypes = [
         "cardsProfession",
@@ -39,6 +43,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     ];
 
     async onCreate(options: any) {
+        // Вручную управляем уничтожением комнаты, чтобы дать время на реконнект
+        this.autoDispose = false;
+
         // Инициализация обработчиков
         this.playerHandler = new PlayerHandler(this);
         this.roomHandler = new RoomHandler(this);
@@ -105,6 +112,34 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             canJoin: canJoin,
             customId: this.state.customId
         }).then(() => updateLobby(this));
+    }
+
+    private clearEmptyRoomDisposeTimer(): void {
+        if (this.emptyRoomDisposeTimer) {
+            this.emptyRoomDisposeTimer.clear();
+            this.emptyRoomDisposeTimer = null;
+        }
+    }
+
+    private scheduleEmptyRoomDisposeIfNeeded(): void {
+        if (this.clients.length > 0) {
+            this.clearEmptyRoomDisposeTimer();
+            return;
+        }
+
+        if (this.emptyRoomDisposeTimer) {
+            return;
+        }
+
+        this.emptyRoomDisposeTimer = this.clock.setTimeout(() => {
+            this.emptyRoomDisposeTimer = null;
+
+            if (this.clients.length === 0) {
+                void this.disconnect().catch((error) => {
+                    ConsoleService.error('Failed to dispose room after empty timeout:', error);
+                });
+            }
+        }, BunkerGameRoom.EMPTY_ROOM_DISPOSE_DELAY_MS);
     }
 
     private async resolveCustomId(providedCustomId?: unknown): Promise<string> {
@@ -250,6 +285,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         // Обновляем статус голоса для всех
         this.voiceHandler.broadcastVoiceStatus();
+
+        this.clearEmptyRoomDisposeTimer();
     }
 
     public findPlayerByClientSessionId(sessionId: string): Player | undefined {
@@ -292,6 +329,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.voiceHandler.updateAllParticipantsPermissions();
             this.voiceHandler.broadcastVoiceStatus();
 
+            this.scheduleEmptyRoomDisposeIfNeeded();
+
             return;
         }
 
@@ -314,9 +353,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         // Обновляем голосовые разрешения
         this.voiceHandler.broadcastVoiceStatus();
+
+        this.scheduleEmptyRoomDisposeIfNeeded();
     }
 
     async onDispose() {
+        this.clearEmptyRoomDisposeTimer();
         this.turnTimer?.clear();
         this.turnTimer = null;
         ApiService.sendEndGame(this.state.customId, []);
