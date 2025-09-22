@@ -319,7 +319,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     async onDispose() {
         this.turnTimer?.clear();
         this.turnTimer = null;
-        ApiService.sendEndGame(this.roomId, []);
+        ApiService.sendEndGame(this.state.customId, []);
         if (this.gameEngine) {
             this.gameEngine.cleanup();
         }
@@ -360,7 +360,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.gameEngine.startGame();
 
             try {
-                ApiService.sendStartGame(this.roomId, playerIds);
+                ApiService.sendStartGame(this.state.customId, playerIds);
             }
             catch (e: any){}
         }

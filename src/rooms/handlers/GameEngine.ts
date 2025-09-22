@@ -532,7 +532,7 @@ export class GameEngine {
 
         this.room.broadcast("gameFinished", { results });
         try {
-            ApiService.sendEndGame(this.room.roomId, results);
+            ApiService.sendEndGame(this.room.state.customId, results);
         }
         catch (e: any){}
 
