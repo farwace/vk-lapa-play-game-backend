@@ -10,6 +10,7 @@ export class Player extends Schema {
     @type("boolean") isReady: boolean = false;
     @type("boolean") canSpeak: boolean = false;
     @type("boolean") isEliminated: boolean = false;
+    @type("boolean") isBot: boolean = false;
 
     @view() @type([Card]) cards = new ArraySchema<Card>();
     @type([Card]) revealedCards = new ArraySchema<Card>();
@@ -26,7 +27,7 @@ export class Player extends Schema {
 
     @type("number") votesAgainst: number = 0;
 
-    constructor(sessionId:string, p: TUser) {
+    constructor(sessionId:string, p: TUser, isBot: boolean = false) {
         super();
         this.sessionId = sessionId;
         this.id = p.id;
@@ -39,6 +40,7 @@ export class Player extends Schema {
         this.isPremium = p.isPremium;
         this.avatar = p.avatar;
         this.name = p.name;
+        this.isBot = isBot;
     }
 
 }

@@ -59,11 +59,6 @@ export class PlayerHandler extends BaseHandler {
             return;
         }
 
-        const playerClient = this.room.clients.find(c => c.sessionId === player.sessionId);
-        if (!playerClient) {
-            return;
-        }
-
         try {
             for(const [currentPlace, placedPlayerId] of this.room.state.places){
                 if(placedPlayerId == player.id){
@@ -71,13 +66,27 @@ export class PlayerHandler extends BaseHandler {
                 }
             }
 
-            playerClient.send('kicked', 'Вас исключили из комнаты')
-            playerClient.leave(1000, "Kicked by host");
+            const playerClient = this.room.clients.find(c => c.sessionId === player.sessionId);
+
+            if (playerClient) {
+                playerClient.send('kicked', 'Вас исключили из комнаты');
+                playerClient.leave(1000, "Kicked by host");
+            }
+
             this.room.state.players.delete(playerId);
+
+            if (!player.isBot) {
+                this.room.voiceHandler.disconnectPlayerFromVoice(player.id.toString());
+            } else {
+                this.room.botManager.onBotRemoved();
+            }
+
+            this.room.updateMetadata();
+            this.room.voiceHandler.broadcastVoiceStatus();
 
             this.room.broadcast("playerKicked", {
                 player: player
-            }, {except: playerClient});
+            }, playerClient ? {except: playerClient} : undefined);
         }
         catch (error) {}
     }

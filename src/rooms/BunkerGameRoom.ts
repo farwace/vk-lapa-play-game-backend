@@ -11,6 +11,7 @@ import { GameHandler } from "./handlers/GameHandler";
 import { GameUtils } from "./handlers/GameUtils";
 import { GameEngine } from "./handlers/GameEngine";
 import { VoiceHandler } from "./handlers/VoiceHandler";
+import { BotManager } from "./handlers/BotManager";
 
 const CUSTOM_ID_REGISTRY_KEY = "bunker:rooms:customIds";
 
@@ -23,6 +24,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     private emptyRoomDisposeTimer: Delayed | null = null;
     public gameEngine: GameEngine;
     public voiceHandler: VoiceHandler;
+    public botManager: BotManager;
 
 
     private playerHandler: PlayerHandler;
@@ -52,6 +54,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.gameHandler = new GameHandler(this);
         this.gameEngine = new GameEngine(this);
         this.voiceHandler = new VoiceHandler(this);
+        this.botManager = new BotManager(this);
 
         await this.voiceHandler.createVoiceRoom();
 
@@ -267,7 +270,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         client.view = new StateView();
         client.view.add(player);
 
-        this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', userData);
+        this.broadcast(isReconnected ? 'playerReconnected' : 'playerConnected', {
+            ...userData,
+            isBot: false
+        });
 
         // Отправляем голосовой токен новому игроку
         const voiceToken = await this.voiceHandler.generateVoiceToken(
@@ -285,6 +291,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         // Обновляем статус голоса для всех
         this.voiceHandler.broadcastVoiceStatus();
+
+        if (!player.isBot) {
+            this.botManager.onHumanPlayerJoined(isReconnected);
+        }
 
         this.clearEmptyRoomDisposeTimer();
     }
@@ -329,6 +339,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.voiceHandler.updateAllParticipantsPermissions();
             this.voiceHandler.broadcastVoiceStatus();
 
+            if (!player.isBot) {
+                this.botManager.onHumanPlayerLeft();
+            }
+
             this.scheduleEmptyRoomDisposeIfNeeded();
 
             return;
@@ -348,6 +362,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.state.players.delete(player.id.toString());
         this.state.disconnectedPlayers.push(player.id.toString());
 
+        if (!player.isBot) {
+            this.botManager.onHumanPlayerLeft();
+        }
+
         this.updateMetadata();
         this.broadcast("playerLeft", { playerId: player.id });
 
@@ -364,6 +382,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         ApiService.sendEndGame(this.state.customId, []);
         if (this.gameEngine) {
             this.gameEngine.cleanup();
+        }
+
+        if (this.botManager) {
+            this.botManager.cleanup();
         }
 
         if (this.state.customId) {

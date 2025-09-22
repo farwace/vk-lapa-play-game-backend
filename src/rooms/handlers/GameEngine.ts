@@ -9,6 +9,8 @@ export class GameEngine {
     private speakingPlayerQueue: number[] = [];
     private currentPlayerIndex: number = 0;
     private cardRevealTimer: any = null;
+    private hasRevealedThisTurn = new Set<string>();
+    private isVotingActive = false;
 
     constructor(room: BunkerGameRoom) {
         this.room = room;
@@ -17,6 +19,7 @@ export class GameEngine {
     public startGame() {
         this.room.state.gameStage = GameStage.CARD_REVEAL;
         this.room.state.canAbstainThisRound = this.room.state.currentRound <= this.room.state.maxAbstainRounds;
+        this.hasRevealedThisTurn.clear();
 
         // Создаем очередь активных игроков (не исключенных)
         this.createPlayerQueue();
@@ -52,6 +55,7 @@ export class GameEngine {
         const currentPlayer = this.room.state.players.get(currentPlayerId.toString());
 
         if (!currentPlayer || currentPlayer.isEliminated) {
+            this.room.botManager.handleTurnFinished(currentPlayerId.toString());
             this.nextPlayer();
             return;
         }
@@ -59,6 +63,7 @@ export class GameEngine {
         this.room.state.currentSpeakerId = currentPlayerId.toString();
         this.room.state.turnTimeRemaining = this.room.state.turnTimeLimit;
         this.room.state.cardRevealTimeRemaining = 15;
+        this.hasRevealedThisTurn.delete(this.room.state.currentSpeakerId);
 
         // Обновляем голосовые разрешения
         await this.room.voiceHandler.updateAllParticipantsPermissions();
@@ -67,7 +72,7 @@ export class GameEngine {
         // Если игрок отключен, сразу открываем случайную карту и переходим к следующему через 3 секунды
         if (!currentPlayer.isConnected) {
             this.forceRevealRandomCard(currentPlayer);
-            setTimeout(() => {
+            this.room.clock.setTimeout(() => {
                 this.nextPlayer();
             }, 3000);
             return;
@@ -81,6 +86,8 @@ export class GameEngine {
 
         // Запускаем таймер для карты (15 секунд)
         this.startCardRevealTimer(currentPlayer);
+
+        this.room.botManager.handleBotTurnStart(currentPlayer);
 
         // Запускаем общий таймер хода (30 секунд)
         this.room.turnTimer = this.room.clock.setInterval(() => {
@@ -163,10 +170,15 @@ export class GameEngine {
             }
         });
 
+        this.hasRevealedThisTurn.add(playerId);
         return true;
     }
 
     private forceRevealRandomCard(player: Player) {
+        if (this.hasRevealedThisTurn.has(player.id.toString())) {
+            return;
+        }
+
         // Находим карты, которые еще не открыты
         const unrevealedCards = player.cards.filter(card =>
             !player.revealedCards.some(revealed => revealed.id === card.id)
@@ -204,6 +216,7 @@ export class GameEngine {
                 customData: revealedCard.customData
             }
         });
+        this.hasRevealedThisTurn.add(player.id.toString());
     }
 
     public finishSpeaking(playerId: string): boolean {
@@ -231,11 +244,18 @@ export class GameEngine {
             this.room.turnTimer = null;
         }
 
+        this.room.botManager.handleTurnFinished(playerId);
         this.nextPlayer();
         return true;
     }
 
     private async nextPlayer() {
+        const previousSpeakerId = this.room.state.currentSpeakerId;
+        if (previousSpeakerId) {
+            this.room.botManager.handleTurnFinished(previousSpeakerId);
+            this.hasRevealedThisTurn.delete(previousSpeakerId);
+        }
+
         this.currentPlayerIndex++;
 
         if (this.currentPlayerIndex >= this.speakingPlayerQueue.length) {
@@ -250,9 +270,12 @@ export class GameEngine {
         this.room.state.gameStage = GameStage.VOTING;
         this.room.state.currentSpeakerId = "";
         this.room.state.turnTimeRemaining = 30; // 30 секунд на голосование
+        this.isVotingActive = true;
 
         await this.room.voiceHandler.updateAllParticipantsPermissions();
         this.room.voiceHandler.broadcastVoiceStatus();
+
+        this.room.botManager.handleVotingStarted();
 
 
         // Сбрасываем голоса всех игроков
@@ -281,6 +304,10 @@ export class GameEngine {
         targetId = (+targetId).toString();
 
         if (this.room.state.gameStage !== GameStage.VOTING) {
+            return false;
+        }
+
+        if (!this.isVotingActive) {
             return false;
         }
 
@@ -336,6 +363,10 @@ export class GameEngine {
     }
 
     private checkAllVoted() {
+        if (!this.isVotingActive) {
+            return;
+        }
+
         const activePlayers = [];
 
         for (const [place, playerId] of this.room.state.places) {
@@ -371,6 +402,18 @@ export class GameEngine {
     }
 
     private finishVoting() {
+        if (!this.isVotingActive) {
+            return;
+        }
+        this.isVotingActive = false;
+
+        if (this.room.turnTimer) {
+            this.room.turnTimer.clear();
+            this.room.turnTimer = null;
+        }
+
+        this.room.botManager.handleVotingFinished();
+
         this.room.state.gameStage = GameStage.RESULTS;
         this.room.state.turnTimeRemaining = 7; // 7 секунд на результаты
 
@@ -481,7 +524,9 @@ export class GameEngine {
                 eliminatedPlayer.isEliminated = true;
                 this.room.state.eliminatedPlayers.push(eliminatedPlayerId);
 
-                this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+                if (!eliminatedPlayer.isBot) {
+                    this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+                }
 
                 // Открываем все карты исключенного игрока
                 for (const card of eliminatedPlayer.cards) {
@@ -507,6 +552,8 @@ export class GameEngine {
 
     private endGame(winners: Player[]) {
         this.room.state.status = RoomStatus.FINISHED;
+
+        this.room.botManager.handleGameFinished();
 
         const results = [];
         let place = 1;
@@ -541,7 +588,7 @@ export class GameEngine {
             player.cards.clear();
             player.revealedCards.clear();
             player.isEliminated = false;
-            player.isReady = false;
+            player.isReady = player.isBot;
 
             if(!player.isConnected){
                 this.room.state.players.delete(playerId);

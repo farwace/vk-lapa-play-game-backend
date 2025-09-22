@@ -15,6 +15,7 @@ export class RoomHandler extends BaseHandler {
         }
         this.room.state.isPrivateRoom = !this.room.state.isPrivateRoom;
         this.room.updateMetadata();
+        this.room.botManager.onPrivateStatusChanged(this.room.state.isPrivateRoom);
     }
 
     onChangePlayersCount = (client: Client, direction: string) => {
@@ -55,7 +56,9 @@ export class RoomHandler extends BaseHandler {
         }
 
         for(const [playerId, player] of this.room.state.players.entries()) {
-            player.isReady = false;
+            if (!player.isBot) {
+                player.isReady = false;
+            }
         }
 
         if(direction == 'add'){

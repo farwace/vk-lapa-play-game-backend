@@ -43,6 +43,10 @@ export class VoiceHandler extends BaseHandler {
             return false;
         }
 
+        if (player.isBot) {
+            return false;
+        }
+
         // Проверяем, что игрок на месте (не спектатор)
         let isOnPlace = false;
         for (const [place, placePlayerId] of this.room.state.places) {
@@ -78,7 +82,7 @@ export class VoiceHandler extends BaseHandler {
         }
 
         for (const [playerId, player] of this.room.state.players) {
-            if (player.isConnected) {
+            if (player.isConnected && !player.isBot) {
                 const canSpeak = this.canPlayerSpeak(playerId);
                 await this.updateParticipantPermissions(playerId, canSpeak);
             }
@@ -134,6 +138,11 @@ export class VoiceHandler extends BaseHandler {
      * Отключает игрока от голосовой комнаты
      */
     async disconnectPlayerFromVoice(playerId: string): Promise<void> {
+        const player = this.room.state.players.get(playerId);
+        if (player?.isBot) {
+            return;
+        }
+
         try {
             await LiveKitService.disconnectParticipant(this.room.roomId, playerId);
         } catch (error) {
