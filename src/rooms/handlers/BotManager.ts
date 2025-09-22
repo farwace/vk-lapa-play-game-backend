@@ -160,11 +160,26 @@ export class BotManager extends BaseHandler {
             return false;
         }
 
-        if (this.getHumanPlayers().length !== 1) {
+        const humanCount = this.getHumanPlayers().length;
+        if (humanCount === 0) {
             return false;
         }
 
-        return this.getBotPlayers().length < BotManager.MAX_BOTS && this.getAvailableSeats() > 0;
+        const botCount = this.getBotPlayers().length;
+        if (botCount >= BotManager.MAX_BOTS) {
+            return false;
+        }
+
+        if (this.getAvailableSeats() === 0) {
+            return false;
+        }
+
+        const totalParticipants = humanCount + botCount;
+        if (totalParticipants >= this.room.state.playersCount) {
+            return false;
+        }
+
+        return true;
     }
 
     private startSpawnCountdown(): void {
@@ -219,15 +234,21 @@ export class BotManager extends BaseHandler {
             return false;
         }
 
-        if (this.getHumanPlayers().length > 1) {
+        const humanCount = this.getHumanPlayers().length;
+        if (humanCount === 0) {
             return false;
         }
 
-        if (this.getBotPlayers().length >= BotManager.MAX_BOTS) {
+        const botCount = this.getBotPlayers().length;
+        if (botCount >= BotManager.MAX_BOTS) {
             return false;
         }
 
-        return this.getAvailableSeats() > 0;
+        if (this.getAvailableSeats() === 0) {
+            return false;
+        }
+
+        return humanCount + botCount < this.room.state.playersCount;
     }
 
     private spawnBot(): boolean {
