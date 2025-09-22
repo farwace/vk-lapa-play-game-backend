@@ -120,13 +120,12 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
         const isTaken = await this.presence.sismember(CUSTOM_ID_REGISTRY_KEY, requestedId);
-        if (!isTaken) {
-            await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, requestedId);
-            return requestedId;
+        if (isTaken) {
+            throw new Error("CUSTOM_ID_ALREADY_IN_USE");
         }
 
-        await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, this.roomId);
-        return this.roomId;
+        await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, requestedId);
+        return requestedId;
     }
 
     private startTurnTimer(callback?:(args:any)=>void, args?: any) {
