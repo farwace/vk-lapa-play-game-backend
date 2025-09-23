@@ -267,6 +267,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }
 
         this.state.players.set(player.id.toString(), player);
+        this.ensureHumanHostAssigned();
+
         client.view = new StateView();
         client.view.add(player);
 
@@ -308,15 +310,60 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         return undefined;
     }
 
-    private assignNewHost(ignorePlayerId: number) {
-        for(const [playerId, player] of this.state.players.entries()) {
-            if(player.id != ignorePlayerId){
-                this.state.hostId = player.id;
-                this.broadcast("leaderChanged", player.id);
-                return;
+    private findHostCandidate(options?: { ignorePlayerId?: number; botsOnly?: boolean }): Player | undefined {
+        const ignoreId = options?.ignorePlayerId;
+        const botsOnly = options?.botsOnly ?? false;
+
+        for (const [, player] of this.state.players) {
+            if (ignoreId !== undefined && player.id === ignoreId) {
+                continue;
+            }
+
+            if (botsOnly) {
+                if (player.isBot) {
+                    return player;
+                }
+            } else if (!player.isBot) {
+                return player;
             }
         }
+
+        return undefined;
+    }
+
+    private assignNewHost(ignorePlayerId: number) {
+        const humanHost = this.findHostCandidate({ ignorePlayerId });
+        const newHost = humanHost ?? this.findHostCandidate({ ignorePlayerId, botsOnly: true });
+
+        if (newHost) {
+            const hostChanged = this.state.hostId !== newHost.id;
+            this.state.hostId = newHost.id;
+            if (hostChanged) {
+                this.broadcast("leaderChanged", newHost.id);
+            }
+            return;
+        }
+
         this.state.hostId = 0;
+    }
+
+    private ensureHumanHostAssigned() {
+        const currentHost = this.state.players.get(this.state.hostId.toString());
+
+        if (currentHost && !currentHost.isBot) {
+            return;
+        }
+
+        const humanHost = this.findHostCandidate();
+        if (!humanHost) {
+            return;
+        }
+
+        const hostChanged = this.state.hostId !== humanHost.id;
+        this.state.hostId = humanHost.id;
+        if (hostChanged) {
+            this.broadcast("leaderChanged", humanHost.id);
+        }
     }
 
     onLeave(client: Client, consented: boolean) {
