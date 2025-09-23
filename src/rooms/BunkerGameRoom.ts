@@ -322,6 +322,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     onLeave(client: Client, consented: boolean) {
         const player = this.findPlayerByClientSessionId(client.sessionId);
         if (!player) { return; }
+        if(!player.isBot){
+            this.allowReconnection(client, 20);
+        }
 
         if(this.state.status == RoomStatus.PLAYING) {
             player.isConnected = false;
