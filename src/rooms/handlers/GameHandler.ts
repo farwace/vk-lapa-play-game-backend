@@ -9,6 +9,9 @@ export class GameHandler extends BaseHandler {
         }
 
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer?.id){
+            return;
+        }
         let playerOnPlace = false;
         let allPlayersOnPlaces = true;
         for(const [currentPlace, placedPlayerId] of this.room.state.places){
