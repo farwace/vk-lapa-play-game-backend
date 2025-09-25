@@ -29,7 +29,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     private playerHandler: PlayerHandler;
     private roomHandler: RoomHandler;
-    private gameHandler: GameHandler;
+    public gameHandler: GameHandler;
 
     private static readonly EMPTY_ROOM_DISPOSE_DELAY_MS = 30_000;
 

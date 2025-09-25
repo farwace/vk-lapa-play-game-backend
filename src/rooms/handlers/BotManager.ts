@@ -274,6 +274,8 @@ export class BotManager extends BaseHandler {
             isBot: true
         });
 
+        this.room.gameHandler.evaluateReadiness();
+
         return true;
     }
 

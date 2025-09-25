@@ -13,14 +13,10 @@ export class GameHandler extends BaseHandler {
             return;
         }
         let playerOnPlace = false;
-        let allPlayersOnPlaces = true;
         for(const [currentPlace, placedPlayerId] of this.room.state.places){
             if(parseInt(currentPlace) < (this.room.state.playersCount)){
                 if(placedPlayerId == currentPlayer.id){
                     playerOnPlace = true;
-                }
-                if(placedPlayerId == 0){
-                    allPlayersOnPlaces = false;
                 }
             }
         }
@@ -28,12 +24,30 @@ export class GameHandler extends BaseHandler {
         if(!playerOnPlace){
             return;
         }
+
+        currentPlayer.isReady = !!state;
+        this.evaluateReadiness();
+    }
+
+    public evaluateReadiness = () => {
+        if(this.room.state.status != RoomStatus.WAITING && this.room.state.status != RoomStatus.STARTING) {
+            return;
+        }
+
+        let allPlayersOnPlaces = true;
+        for(const [currentPlace, placedPlayerId] of this.room.state.places){
+            if(parseInt(currentPlace) < (this.room.state.playersCount)){
+                if(placedPlayerId == 0){
+                    allPlayersOnPlaces = false;
+                }
+            }
+        }
+
         if (this.room.turnTimer) {
             this.room.state.status = RoomStatus.WAITING;
             this.room.state.turnTimeRemaining = 0;
             this.room.turnTimer.clear();
         }
-        currentPlayer.isReady = !!state;
 
         if(!allPlayersOnPlaces){
             return;
