@@ -151,12 +151,26 @@ export class BotManager extends BaseHandler {
         }
     }
 
+    public onUseBotsStatusChanged(useBots: boolean): void {
+        this.stopBotSpawning();
+        this.clearSpawnCountdown();
+        if(!!useBots) {
+            if (this.shouldScheduleSpawning()) {
+                this.startSpawnCountdown();
+            }
+        }
+    }
+
     private shouldScheduleSpawning(): boolean {
         if (this.room.state.status !== RoomStatus.WAITING) {
             return false;
         }
 
         if (this.room.state.isPrivateRoom) {
+            return false;
+        }
+
+        if(!this.room.state.useBots){
             return false;
         }
 

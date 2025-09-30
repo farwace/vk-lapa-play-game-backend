@@ -61,6 +61,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if(options?.isPrivate){
             this.state.isPrivateRoom = true;
         }
+        if(options?.useBots === false){
+            this.state.useBots = false;
+        }
+
         this.state.customId = await this.resolveCustomId(options?.customId);
 
         let cntPlayers = 8;
@@ -85,6 +89,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('kickPlayer', this.playerHandler.onKickPlayer.bind(this.playerHandler));
         this.onMessage('setLeaderPlayer', this.playerHandler.onSetLeaderPlayer.bind(this.playerHandler));
         this.onMessage('togglePrivateRoom', this.roomHandler.onTogglePrivate.bind(this.roomHandler));
+        this.onMessage('toggleUseBotsValue', this.roomHandler.onToggleBots.bind(this.roomHandler));
         this.onMessage('changePlayersCount', this.roomHandler.onChangePlayersCount.bind(this.roomHandler));
         this.onMessage('ready', this.gameHandler.onReady.bind(this.gameHandler));
 
