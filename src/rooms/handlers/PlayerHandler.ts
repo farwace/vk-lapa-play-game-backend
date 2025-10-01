@@ -3,20 +3,30 @@ import { BaseHandler } from "./BaseHandler";
 import { RoomStatus } from "../schema/bunker/BunkerGameRoomState";
 
 export class PlayerHandler extends BaseHandler {
-    onChangePlace = (client: Client, payload: string) => {
-        const placeNum = (+payload).toString();
+    onChangePlace = (client: Client, payload: string | number) => {
+        const parsedPlace = typeof payload === 'number'
+            ? payload
+            : Number.parseInt(String(payload), 10);
+
+        if(!Number.isFinite(parsedPlace)) {
+            client.send('error', 'Неверный номер места');
+            return;
+        }
+
+        const placeIndex = Math.floor(parsedPlace);
+        const placeNum = placeIndex.toString();
         const placeValue = this.room.state.places.get(placeNum);
         if(this.room.state.status != RoomStatus.WAITING) {
             client.send('error', 'Нельзя менять место во время игры');
             return;
         }
 
-        if((+placeNum) >= this.room.state.maxPlayers || (+placeNum) < 0){
+        if(placeIndex >= this.room.state.maxPlayers || placeIndex < 0){
             client.send('error', 'Нельзя занять это место');
             return;
         }
 
-        if(placeValue != 0 || (+placeNum) >= this.room.state.playersCount){
+        if(placeValue != 0 || placeIndex >= this.room.state.playersCount){
             client.send('error', 'Место занято');
             return;
         }
@@ -36,19 +46,30 @@ export class PlayerHandler extends BaseHandler {
         this.room.state.places.set(placeNum, player.id);
     }
 
-    onKickPlayer = (client: Client, playerId: string) => {
+    onKickPlayer = (client: Client, playerId: string | number) => {
         if(this.room.state.status != RoomStatus.WAITING) {
             client.send('error', 'Нельзя исключать игроков во время игры');
             return;
         }
 
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
+        const targetId = this.normalizePlayerId(playerId);
+        if(!targetId){
+            client.send('error', 'Игрок не найден!');
+            return;
+        }
+
         if(this.room.state.hostId != currentPlayer.id){
             client.send('error', 'Исключать игроков может только лидер комнаты!');
             return;
         }
 
-        const player = this.room.state.players.get(playerId);
+        const player = this.room.state.players.get(targetId);
         if(!player || !player?.id){
             client.send('error', 'Игрок не найден!');
             return;
@@ -73,7 +94,7 @@ export class PlayerHandler extends BaseHandler {
                 playerClient.leave(1000, "Kicked by host");
             }
 
-            this.room.state.players.delete(playerId);
+            this.room.state.players.delete(targetId);
 
             if (!player.isBot) {
                 this.room.voiceHandler.disconnectPlayerFromVoice(player.id.toString());
@@ -92,19 +113,30 @@ export class PlayerHandler extends BaseHandler {
         catch (error) {}
     }
 
-    onSetLeaderPlayer = (client: Client, playerId: string) => {
+    onSetLeaderPlayer = (client: Client, playerId: string | number) => {
         if(this.room.state.status != RoomStatus.WAITING) {
             client.send('error', 'Нельзя менять лидера во время игры');
             return;
         }
 
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
+        const targetId = this.normalizePlayerId(playerId);
+        if(!targetId){
+            client.send('error', 'Игрок не найден!');
+            return;
+        }
+
         if(this.room.state.hostId != currentPlayer.id){
             client.send('error', 'Назначать лидера комнаты может только лидер комнаты!');
             return;
         }
 
-        const player = this.room.state.players.get(playerId);
+        const player = this.room.state.players.get(targetId);
         if(!player || !player?.id){
             client.send('error', 'Игрок не найден!');
             return;
@@ -125,5 +157,27 @@ export class PlayerHandler extends BaseHandler {
             this.room.broadcast("leaderChanged", player.id);
         }
         catch (error) {}
+    }
+
+    private normalizePlayerId(playerId: string | number): string | undefined {
+        if (typeof playerId === 'number' && Number.isFinite(playerId)) {
+            const normalized = Math.floor(playerId);
+            return normalized >= 0 ? normalized.toString() : undefined;
+        }
+
+        if (typeof playerId === 'string') {
+            const trimmed = playerId.trim();
+            if (!trimmed) {
+                return undefined;
+            }
+
+            if(!/^\d+$/.test(trimmed)) {
+                return undefined;
+            }
+
+            return trimmed;
+        }
+
+        return undefined;
     }
 }

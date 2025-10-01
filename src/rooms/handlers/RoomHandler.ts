@@ -9,6 +9,11 @@ export class RoomHandler extends BaseHandler {
             return;
         }
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
         if(this.room.state.hostId != currentPlayer.id){
             client.send('error', 'Менять приватность может только лидер комнаты!');
             return;
@@ -23,6 +28,11 @@ export class RoomHandler extends BaseHandler {
             return;
         }
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
         if(this.room.state.hostId != currentPlayer.id){
             client.send('error', 'Менять этот параметр может только лидер комнаты!');
             return;
@@ -33,7 +43,11 @@ export class RoomHandler extends BaseHandler {
     }
 
     onChangePlayersCount = (client: Client, direction: string) => {
-        if(direction != 'add' && direction != 'sub'){
+        const normalizedDirection = direction === 'add' || direction === 'sub'
+            ? direction
+            : undefined;
+
+        if(!normalizedDirection){
             return;
         }
 
@@ -42,18 +56,23 @@ export class RoomHandler extends BaseHandler {
             return;
         }
         const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
         if(this.room.state.hostId != currentPlayer.id){
             client.send('error', 'Менять количество игроков может только лидер комнаты!');
             return;
         }
 
         const playersCount = this.room.state.playersCount;
-        if(playersCount == this.room.state.minPlayers && direction == 'sub'){
+        if(playersCount == this.room.state.minPlayers && normalizedDirection == 'sub'){
             const plText = this.room.state.minPlayers == 4 ? ' игрока' : ' игроков'
             client.send('error', 'Минимум ' + this.room.state.minPlayers + plText);
             return;
         }
-        if(playersCount == this.room.state.maxPlayers && direction == 'add'){
+        if(playersCount == this.room.state.maxPlayers && normalizedDirection == 'add'){
             client.send('error', 'Максимум ' + this.room.state.maxPlayers + ' игроков');
             return;
         }
@@ -65,7 +84,7 @@ export class RoomHandler extends BaseHandler {
             }
         }
 
-        if(placesCount == playersCount && direction == 'sub'){
+        if(placesCount == playersCount && normalizedDirection == 'sub'){
             client.send('error', 'Места заняты. Исключите игрока чтобы уменьшить количество мест');
             return;
         }
@@ -76,7 +95,7 @@ export class RoomHandler extends BaseHandler {
             }
         }
 
-        if(direction == 'add'){
+        if(normalizedDirection == 'add'){
             this.room.state.playersCount += 1;
         }
         else{

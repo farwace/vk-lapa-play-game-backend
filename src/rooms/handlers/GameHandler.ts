@@ -85,6 +85,18 @@ export class GameHandler extends BaseHandler {
             return;
         }
 
+        const normalizedCardId = cardId.trim();
+
+        if (!normalizedCardId) {
+            client.send('error', 'Не удалось определить карту');
+            return;
+        }
+
+        if(isNaN(+normalizedCardId)){
+            client.send('error', 'Не удалось определить карту');
+            return;
+        }
+
         const player = this.room.findPlayerByClientSessionId(client.sessionId);
         if (!player) {
             client.send('error', 'Игрок не найден');
@@ -101,7 +113,7 @@ export class GameHandler extends BaseHandler {
             return;
         }
 
-        if (!this.room.gameEngine.revealCard(player.id.toString(), cardId)) {
+        if (!this.room.gameEngine.revealCard(player.id.toString(), normalizedCardId)) {
             client.send('error', 'Не удалось показать карту');
         }
     }
@@ -134,6 +146,13 @@ export class GameHandler extends BaseHandler {
             return;
         }
 
+        const normalizedTarget = targetId.trim();
+
+        if (!normalizedTarget) {
+            client.send('error', 'Ошибка отправки голоса');
+            return;
+        }
+
         const player = this.room.findPlayerByClientSessionId(client.sessionId);
         if (!player) {
             client.send('error', 'Игрок не найден');
@@ -141,12 +160,12 @@ export class GameHandler extends BaseHandler {
         }
 
         // Проверяем, что можно воздержаться, если targetId === "0"
-        if (targetId == "0" && !this.room.state.canAbstainThisRound) {
+        if (normalizedTarget == "0" && !this.room.state.canAbstainThisRound) {
             client.send('error', 'В этом раунде нельзя воздержаться от голосования');
             return;
         }
 
-        if (!this.room.gameEngine.vote(player.id.toString(), targetId)) {
+        if (!this.room.gameEngine.vote(player.id.toString(), normalizedTarget)) {
             client.send('error', 'Не удалось проголосовать');
         }
     }

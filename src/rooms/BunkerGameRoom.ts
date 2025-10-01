@@ -33,6 +33,9 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
     private static readonly EMPTY_ROOM_DISPOSE_DELAY_MS = 30_000;
     private static readonly KICK_COOLDOWN_MS = 30_000;
+    private static readonly CUSTOM_ID_MAX_LENGTH = 64;
+    private static readonly AUTH_STRING_MAX_LENGTH = 2048;
+    private static readonly CUSTOM_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
     private allCardTypes = [
         "cardsProfession",
@@ -61,22 +64,24 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         await this.voiceHandler.createVoiceRoom();
 
-        if(options?.isPrivate){
-            this.state.isPrivateRoom = true;
-        }
-        if(options?.useBots === false){
-            this.state.useBots = false;
+        const normalizedOptions = this.normalizeCreateOptions(options);
+
+        if (normalizedOptions.isPrivateRoom !== undefined) {
+            this.state.isPrivateRoom = normalizedOptions.isPrivateRoom;
         }
 
-        this.state.customId = await this.resolveCustomId(options?.customId);
-
-        let cntPlayers = 8;
-
-        if(options?.playersCount){
-            if(parseInt(options?.playersCount) >= this.state.minPlayers && parseInt(options?.playersCount) <= this.state.maxPlayers){
-                cntPlayers = parseInt(options?.playersCount);
-            }
+        if (normalizedOptions.useBots !== undefined) {
+            this.state.useBots = normalizedOptions.useBots;
         }
+
+        try {
+            this.state.customId = await this.resolveCustomId(normalizedOptions.customId);
+        } catch (error) {
+            ConsoleService.warn('Failed to assign custom room id, using generated one instead.', error);
+            this.state.customId = await this.resolveCustomId();
+        }
+
+        const cntPlayers = normalizedOptions.playersCount ?? this.state.playersCount;
 
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
         this.state.playersCount = cntPlayers;
@@ -153,6 +158,106 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }, BunkerGameRoom.EMPTY_ROOM_DISPOSE_DELAY_MS);
     }
 
+    private normalizeCreateOptions(options: unknown): {
+        isPrivateRoom?: boolean;
+        useBots?: boolean;
+        playersCount?: number;
+        customId?: string;
+    } {
+        const normalized: {
+            isPrivateRoom?: boolean;
+            useBots?: boolean;
+            playersCount?: number;
+            customId?: string;
+        } = {};
+
+        if (!options || typeof options !== 'object') {
+            return normalized;
+        }
+
+        const raw = options as Record<string, unknown>;
+
+        if (typeof raw.isPrivate === 'boolean') {
+            normalized.isPrivateRoom = raw.isPrivate;
+        }
+
+        if (typeof raw.useBots === 'boolean') {
+            normalized.useBots = raw.useBots;
+        }
+
+        const playersCountCandidate = this.extractNumber(raw.playersCount);
+        if (playersCountCandidate !== undefined) {
+            const boundedPlayersCount = Math.max(
+                this.state.minPlayers,
+                Math.min(this.state.maxPlayers, playersCountCandidate)
+            );
+            normalized.playersCount = boundedPlayersCount;
+        }
+
+        const customId = this.normalizeCustomId(raw.customId);
+        if (customId) {
+            normalized.customId = customId;
+        }
+
+        return normalized;
+    }
+
+    private normalizeCustomId(rawCustomId: unknown): string | undefined {
+        if (rawCustomId === undefined || rawCustomId === null) {
+            return undefined;
+        }
+
+        const asString = String(rawCustomId).trim();
+        if (!asString) {
+            return undefined;
+        }
+
+        if (asString.length > BunkerGameRoom.CUSTOM_ID_MAX_LENGTH) {
+            ConsoleService.warn('Received customId that exceeds maximum length, ignoring.');
+            return undefined;
+        }
+
+        if (!BunkerGameRoom.CUSTOM_ID_PATTERN.test(asString)) {
+            ConsoleService.warn('Received customId with disallowed characters, ignoring.');
+            return undefined;
+        }
+
+        return asString;
+    }
+
+    private extractNumber(value: unknown): number | undefined {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return Math.floor(value);
+        }
+
+        if (typeof value === 'string' && value.trim() !== '') {
+            const parsed = Number.parseInt(value, 10);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+
+        return undefined;
+    }
+
+    private extractAuthString(options: unknown): string {
+        if (!options || typeof options !== 'object') {
+            return '';
+        }
+
+        const rawAuth = (options as Record<string, unknown>).authString;
+        if (typeof rawAuth !== 'string') {
+            return '';
+        }
+
+        if (rawAuth.length > BunkerGameRoom.AUTH_STRING_MAX_LENGTH) {
+            ConsoleService.warn('Received authString longer than allowed, truncating.');
+            return rawAuth.slice(0, BunkerGameRoom.AUTH_STRING_MAX_LENGTH);
+        }
+
+        return rawAuth;
+    }
+
     public applyKickCooldown(playerId: number): void {
         const expiresAt = Date.now() + BunkerGameRoom.KICK_COOLDOWN_MS;
         this.kickedPlayersCooldowns.set(playerId, expiresAt);
@@ -190,6 +295,14 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         if (!requestedId) {
             await this.presence.sadd(CUSTOM_ID_REGISTRY_KEY, this.roomId);
             return this.roomId;
+        }
+
+        if (requestedId.length > BunkerGameRoom.CUSTOM_ID_MAX_LENGTH) {
+            throw new Error("CUSTOM_ID_TOO_LONG");
+        }
+
+        if (!BunkerGameRoom.CUSTOM_ID_PATTERN.test(requestedId)) {
+            throw new Error("CUSTOM_ID_INVALID_CHARS");
         }
 
         const isTaken = await this.presence.sismember(CUSTOM_ID_REGISTRY_KEY, requestedId);
@@ -240,7 +353,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     }
 
     async onJoin(client: Client, options: any) {
-        const userData = await ApiService.authenticatePlayer(options.authString || '');
+        const authString = this.extractAuthString(options);
+        const userData = await ApiService.authenticatePlayer(authString);
         if (!userData) throw new Error('Не удалось идентифицировать игрока');
 
         const kickCooldownMs = this.getKickCooldownRemainingMs(userData.id);
