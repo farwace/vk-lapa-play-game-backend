@@ -32,6 +32,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     public gameHandler: GameHandler;
 
     private static readonly EMPTY_ROOM_DISPOSE_DELAY_MS = 30_000;
+    private static readonly KICK_COOLDOWN_MS = 30_000;
 
     private allCardTypes = [
         "cardsProfession",
@@ -43,6 +44,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         "cardsSkills",
         "cardsLuggage"
     ];
+
+    private kickedPlayersCooldowns: Map<number, number> = new Map<number, number>();
 
     async onCreate(options: any) {
         // Вручную управляем уничтожением комнаты, чтобы дать время на реконнект
@@ -150,6 +153,33 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         }, BunkerGameRoom.EMPTY_ROOM_DISPOSE_DELAY_MS);
     }
 
+    public applyKickCooldown(playerId: number): void {
+        const expiresAt = Date.now() + BunkerGameRoom.KICK_COOLDOWN_MS;
+        this.kickedPlayersCooldowns.set(playerId, expiresAt);
+
+        this.clock.setTimeout(() => {
+            const storedExpiresAt = this.kickedPlayersCooldowns.get(playerId);
+            if (storedExpiresAt !== undefined && storedExpiresAt <= Date.now()) {
+                this.kickedPlayersCooldowns.delete(playerId);
+            }
+        }, BunkerGameRoom.KICK_COOLDOWN_MS);
+    }
+
+    private getKickCooldownRemainingMs(playerId: number): number {
+        const expiresAt = this.kickedPlayersCooldowns.get(playerId);
+        if (expiresAt === undefined) {
+            return 0;
+        }
+
+        const remaining = expiresAt - Date.now();
+        if (remaining <= 0) {
+            this.kickedPlayersCooldowns.delete(playerId);
+            return 0;
+        }
+
+        return remaining;
+    }
+
     private async resolveCustomId(providedCustomId?: unknown): Promise<string> {
         const providedAsString =
             providedCustomId !== undefined && providedCustomId !== null
@@ -212,6 +242,14 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     async onJoin(client: Client, options: any) {
         const userData = await ApiService.authenticatePlayer(options.authString || '');
         if (!userData) throw new Error('Не удалось идентифицировать игрока');
+
+        const kickCooldownMs = this.getKickCooldownRemainingMs(userData.id);
+        if (kickCooldownMs > 0) {
+            const remainingSeconds = Math.ceil(kickCooldownMs / 1000);
+            client.send('error', `Вы были исключены из комнаты. Попробуйте снова через ${remainingSeconds} секунд.`);
+            await client.leave(4000, "Kick cooldown active");
+            return;
+        }
 
         let isReconnected = false;
 

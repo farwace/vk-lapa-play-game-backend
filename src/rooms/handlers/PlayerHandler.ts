@@ -77,6 +77,7 @@ export class PlayerHandler extends BaseHandler {
 
             if (!player.isBot) {
                 this.room.voiceHandler.disconnectPlayerFromVoice(player.id.toString());
+                this.room.applyKickCooldown(player.id);
             } else {
                 this.room.botManager.onBotRemoved();
             }
