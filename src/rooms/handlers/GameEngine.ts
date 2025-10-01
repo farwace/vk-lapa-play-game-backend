@@ -62,7 +62,7 @@ export class GameEngine {
 
         this.room.state.currentSpeakerId = currentPlayerId.toString();
         this.room.state.turnTimeRemaining = this.room.state.turnTimeLimit;
-        this.room.state.cardRevealTimeRemaining = 15;
+        this.room.state.cardRevealTimeRemaining = 25;
         this.hasRevealedThisTurn.delete(this.room.state.currentSpeakerId);
 
         // Обновляем голосовые разрешения
@@ -84,7 +84,7 @@ export class GameEngine {
             cardRevealTime: this.room.state.cardRevealTimeRemaining
         });
 
-        // Запускаем таймер для карты (15 секунд)
+        // Запускаем таймер для карты (25 секунд)
         this.startCardRevealTimer(currentPlayer);
 
         this.room.botManager.handleBotTurnStart(currentPlayer);
