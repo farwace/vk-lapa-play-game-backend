@@ -467,13 +467,14 @@ export class GameEngine {
                 eliminateType = "voting";
             } else if (candidates.length > 1) {
                 // Несколько кандидатов с одинаковым количеством голосов
-                eliminateType = "controversialVoting";
                 if (this.room.state.canAbstainThisRound) {
                     // Можно воздержаться, никто не выбывает
                     eliminatedPlayerId = null;
+                    eliminateType = null;
                 } else {
                     // Нельзя воздержаться, выбираем случайного из кандидатов
                     eliminatedPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
+                    eliminateType = "controversialVoting";
                 }
             }
         }
@@ -482,10 +483,10 @@ export class GameEngine {
             votes: voteCount,
             eliminatedPlayerId: eliminatedPlayerId,
             round: this.room.state.currentRound,
-            eliminateType
+            eliminateType: eliminatedPlayerId ? eliminateType : null
         });
 
-        this.processElimination(eliminatedPlayerId);
+        this.processElimination(eliminatedPlayerId, eliminatedPlayerId !== null);
 
         this.room.turnTimer = this.room.clock.setInterval(() => {
             this.room.state.turnTimeRemaining--;
@@ -522,7 +523,7 @@ export class GameEngine {
         }
     }
 
-    private processElimination(eliminatedPlayerId: string | null) {
+    private processElimination(eliminatedPlayerId: string | null, delayVoiceMute: boolean = false) {
         if (eliminatedPlayerId) {
             const eliminatedPlayer = this.room.state.players.get(eliminatedPlayerId);
             if (eliminatedPlayer) {
@@ -530,7 +531,13 @@ export class GameEngine {
                 this.room.state.eliminatedPlayers.push(eliminatedPlayerId);
 
                 if (!eliminatedPlayer.isBot) {
-                    this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+                    if (delayVoiceMute) {
+                        this.room.clock.setTimeout(() => {
+                            this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+                        }, 3000);
+                    } else {
+                        this.room.voiceHandler.updateParticipantPermissions(eliminatedPlayerId, false);
+                    }
                 }
 
                 // Открываем все карты исключенного игрока
