@@ -437,6 +437,7 @@ export class GameEngine {
         }
 
         let eliminatedPlayerId: string | null = null;
+        let eliminateType: "voting" | "controversialVoting" | "random" | null = null;
 
         if (totalVotes === 0) {
             // Никто не голосовал или все воздержались
@@ -453,6 +454,7 @@ export class GameEngine {
                 }
                 if (candidates.length > 0) {
                     eliminatedPlayerId = candidates[Math.floor(Math.random() * candidates.length)];
+                    eliminateType = "random";
                 }
             }
         } else {
@@ -462,8 +464,10 @@ export class GameEngine {
 
             if (candidates.length === 1) {
                 eliminatedPlayerId = candidates[0];
+                eliminateType = "voting";
             } else if (candidates.length > 1) {
                 // Несколько кандидатов с одинаковым количеством голосов
+                eliminateType = "controversialVoting";
                 if (this.room.state.canAbstainThisRound) {
                     // Можно воздержаться, никто не выбывает
                     eliminatedPlayerId = null;
@@ -477,7 +481,8 @@ export class GameEngine {
         this.room.broadcast("votingResults", {
             votes: voteCount,
             eliminatedPlayerId: eliminatedPlayerId,
-            round: this.room.state.currentRound
+            round: this.room.state.currentRound,
+            eliminateType
         });
 
         this.processElimination(eliminatedPlayerId);
