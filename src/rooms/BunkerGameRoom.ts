@@ -86,7 +86,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.allCardTypes.forEach(type => this.state.activeCardTypes.push(type));
         this.state.playersCount = cntPlayers;
 
-        for (let i = 0; i < this.state.playersCount; i++) {
+        for (let i = 0; i < this.state.maxPlayers; i++) {
             this.state.places.set(i.toString(), 0);
         }
 
