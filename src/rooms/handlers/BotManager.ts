@@ -11,8 +11,8 @@ interface TurnTimers {
 
 export class BotManager extends BaseHandler {
     private static readonly MAX_BOTS = 3;
-    private static readonly INITIAL_DELAY_MS = 10_000;
-    private static readonly SPAWN_INTERVAL_MS = 5_000;
+    private static readonly INITIAL_DELAY_MS = 3_000;
+    private static readonly SPAWN_INTERVAL_MS = 2_000;
     private static readonly BOT_ID_START = 900_000_000;
 
     private botSpawnStartTimer: Delayed | null = null;
