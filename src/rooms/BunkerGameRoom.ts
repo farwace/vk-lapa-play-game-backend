@@ -49,6 +49,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
     ];
 
     private kickedPlayersCooldowns: Map<number, number> = new Map<number, number>();
+    private readonly messageCooldowns: Map<string, number> = new Map();
 
     async onCreate(options: any) {
         // Вручную управляем уничтожением комнаты, чтобы дать время на реконнект
@@ -100,6 +101,8 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('toggleUseBotsValue', this.roomHandler.onToggleBots.bind(this.roomHandler));
         this.onMessage('changePlayersCount', this.roomHandler.onChangePlayersCount.bind(this.roomHandler));
         this.onMessage('ready', this.gameHandler.onReady.bind(this.gameHandler));
+
+        this.onMessage('sendMessage', this.onPlayerSendMessage.bind(this));
 
         // Новые обработчики для игрового процесса
         this.onMessage('revealCard', this.gameHandler.onRevealCard.bind(this.gameHandler));
@@ -327,6 +330,37 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
                 callback?.(args);
             }
         }, 1000);
+    }
+
+    private onPlayerSendMessage = (client: Client, message?: string) => {
+        if (typeof message !== 'string') {
+            return;
+        }
+
+        const player = this.findPlayerByClientSessionId(client.sessionId);
+        if (!player) {
+            client.send('error', 'Игрок не найден');
+            return;
+        }
+
+        const sanitizedMessage = message.trim().slice(0, 50);
+        if (!sanitizedMessage) {
+            return;
+        }
+
+        const now = Date.now();
+        const lastSentAt = this.messageCooldowns.get(client.sessionId) ?? 0;
+        if (now - lastSentAt < 2000) {
+            client.send('error', 'Слишком часто, попробуйте позже');
+            return;
+        }
+
+        this.messageCooldowns.set(client.sessionId, now);
+
+        this.broadcast('playerMessage', {
+            playerId: player.id,
+            message: sanitizedMessage,
+        });
     }
 
     private onRequestVoiceToken = async (client: Client) => {
