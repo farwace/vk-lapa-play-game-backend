@@ -2,6 +2,7 @@ import { BunkerGameRoom } from "../BunkerGameRoom";
 import { SimpleScenario } from "../schema/bunker/SimpleScenario";
 import { Card, CardCustomData } from "../schema/bunker/Card";
 import { RoomStatus } from "../schema/bunker/BunkerGameRoomState";
+import { Player } from "../schema/bunker/Player";
 import ApiService from "../../services/ApiService";
 
 export class GameUtils {
@@ -63,7 +64,108 @@ export class GameUtils {
             scenario.smallImageUrl
         );
 
-        const usedCardIds = new Set();
+        const usedCardIds = new Set<string>();
+
+        const propertyToCardType: Record<string, string> = {
+            cardsProfession: 'profession',
+            cardsHealth: 'health',
+            cardsCharacteristic: 'characteristic',
+            cardsAdditionalInformation: 'additional_information',
+            cardsPhobias: 'phobias',
+            cardsSkills: 'skills',
+            cardsLuggage: 'luggage'
+        };
+
+        const eligiblePlayers: Player[] = [];
+        for (const [currentPlace, placedPlayerId] of room.state.places) {
+            if (parseInt(currentPlace) < room.state.playersCount && placedPlayerId > 0) {
+                const player = room.state.players.get(placedPlayerId.toString());
+                if (player?.id) {
+                    eligiblePlayers.push(player);
+                }
+            }
+        }
+
+        const shuffleArray = <T>(source: T[]): T[] => {
+            const arr = source.slice();
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        };
+
+        const topCardAssignments = new Map<string, Map<string, Card>>();
+
+        if (scenario.topCards.length > 0 && eligiblePlayers.length > 0) {
+            const topCardsByType = new Map<string, Card[]>();
+            scenario.topCards.forEach(card => {
+                const cards = topCardsByType.get(card.type) || [];
+                cards.push(card);
+                topCardsByType.set(card.type, cards);
+            });
+
+            for (const cardGroup of scenario.getAllCardTypes()) {
+                const topType = propertyToCardType[cardGroup];
+                if (!topType) {
+                    continue;
+                }
+
+                const cardsPool = topCardsByType.get(topType);
+                if (!cardsPool || cardsPool.length === 0) {
+                    continue;
+                }
+
+                const desiredAssignments = Math.min(
+                    Math.max(1, Math.floor(Math.random() * 2) + 1),
+                    cardsPool.length,
+                    eligiblePlayers.length
+                );
+
+                if (desiredAssignments === 0) {
+                    continue;
+                }
+
+                const playersPool = shuffleArray(eligiblePlayers);
+                const cardsCandidates = cardsPool.slice();
+                let assignedCount = 0;
+                let playerIndex = 0;
+
+                while (assignedCount < desiredAssignments && playerIndex < playersPool.length && cardsCandidates.length > 0) {
+                    const player = playersPool[playerIndex];
+                    playerIndex += 1;
+
+                    if (!player) {
+                        continue;
+                    }
+
+                    const cardIndex = cardsCandidates.findIndex(card => {
+                        if (!card.active) {
+                            return false;
+                        }
+                        return player.isMale ? !!card.maleImageUrl : !!card.femaleImageUrl;
+                    });
+
+                    if (cardIndex === -1) {
+                        continue;
+                    }
+
+                    const [selectedTopCard] = cardsCandidates.splice(cardIndex, 1);
+                    if (!selectedTopCard) {
+                        break;
+                    }
+
+                    let playerAssignments = topCardAssignments.get(player.id.toString());
+                    if (!playerAssignments) {
+                        playerAssignments = new Map<string, Card>();
+                        topCardAssignments.set(player.id.toString(), playerAssignments);
+                    }
+
+                    playerAssignments.set(cardGroup, selectedTopCard);
+                    assignedCount += 1;
+                }
+            }
+        }
 
         for(const [currentPlace, placedPlayerId] of room.state.places){
             if(parseInt(currentPlace) < (room.state.playersCount)){
@@ -73,6 +175,33 @@ export class GameUtils {
                         player.cards.clear();
 
                         for (const type of scenario.getAllCardTypes()) {
+                            const topCard = topCardAssignments.get(player.id.toString())?.get(type);
+                            if (topCard) {
+                                const customData = new CardCustomData();
+                                if (topCard.customData?.from) {
+                                    customData.from = topCard.customData.from;
+                                }
+                                if (topCard.customData?.to) {
+                                    customData.to = topCard.customData.to;
+                                }
+                                if (topCard.customData?.value) {
+                                    customData.value = topCard.customData.value;
+                                }
+
+                                const card = new Card(
+                                    topCard.id,
+                                    topCard.name,
+                                    topCard.type,
+                                    topCard.active,
+                                    topCard.maleImageUrl,
+                                    topCard.femaleImageUrl,
+                                    customData,
+                                    topCard.value
+                                );
+                                player.cards.push(card);
+                                usedCardIds.add(topCard.id);
+                                continue;
+                            }
                             if(type == 'cardsAge'){
                                 const age = Math.floor(Math.random() * 110) + 1;
                                 const cards = scenario[type]?.slice() || [];

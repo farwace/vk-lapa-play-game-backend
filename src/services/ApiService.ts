@@ -103,6 +103,29 @@ export class ApiService {
                 }
             }
 
+            if (res.data.data.topCards) {
+                res.data.data.topCards.forEach(cardData => {
+                    const customData = new CardCustomData();
+                    if (cardData.customData?.from) {
+                        customData.from = cardData.customData.from;
+                    }
+                    if (cardData.customData?.to) {
+                        customData.to = cardData.customData.to;
+                    }
+
+                    const card = new Card(
+                        cardData.id.toString(),
+                        cardData.name,
+                        cardData.type,
+                        cardData.active,
+                        cardData.maleImageUrl || '',
+                        cardData.femaleImageUrl || '',
+                        customData
+                    );
+                    scenario.topCards.push(card);
+                });
+            }
+
             return scenario;
         } catch (error) {
             ConsoleService.error("Ошибка при получении сценария:", error);

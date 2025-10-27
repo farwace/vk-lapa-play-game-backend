@@ -42,5 +42,5 @@ export type TScenarioResponse = {
     cardsAge: TCard[] | null,
     cardsAdditionalInformation: TCard[] | null,
     cardsPhobias: TCard[] | null,
-
+    topCards: TCard[] | null,
 }

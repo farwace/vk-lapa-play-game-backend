@@ -16,6 +16,7 @@ export class Scenario extends Schema {
   @type([Card]) cardsPhobias = new ArraySchema<Card>();
   @type([Card]) cardsSkills = new ArraySchema<Card>();
   @type([Card]) cardsLuggage = new ArraySchema<Card>();
+  @type([Card]) topCards = new ArraySchema<Card>();
 
   getAllCardTypes(): (
       "cardsProfession" |
