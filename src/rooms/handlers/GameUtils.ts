@@ -167,6 +167,12 @@ export class GameUtils {
             }
         }
 
+        for (const playerAssignments of topCardAssignments.values()) {
+            for (const card of playerAssignments.values()) {
+                usedCardIds.add(card.id); // reserve top cards before regular distribution
+            }
+        }
+
         for(const [currentPlace, placedPlayerId] of room.state.places){
             if(parseInt(currentPlace) < (room.state.playersCount)){
                 if(placedPlayerId > 0){
