@@ -564,6 +564,7 @@ export class GameEngine {
 
     private endGame(winners: Player[]) {
         this.room.state.status = RoomStatus.FINISHED;
+        this.room.updateMetadata();
 
         this.room.botManager.handleGameFinished();
 
@@ -626,6 +627,7 @@ export class GameEngine {
                 this.room.turnTimer.clear();
                 this.room.turnTimer = null;
                 this.room.state.status = RoomStatus.WAITING;
+                this.room.updateMetadata();
             }
         }, 1000);
     }

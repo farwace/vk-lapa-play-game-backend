@@ -55,6 +55,7 @@ export class GameUtils {
 
     static async initGame(room: BunkerGameRoom) {
         room.state.status = RoomStatus.PLAYING;
+        room.updateMetadata();
         const scenario = await this.loadScenario();
         room.state.scenario = new SimpleScenario(
             scenario.id,
