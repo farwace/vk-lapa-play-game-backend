@@ -6,9 +6,10 @@ import { Player } from "../schema/bunker/Player";
 import ApiService from "../../services/ApiService";
 
 export class GameUtils {
-    static async loadScenario() {
+    static async loadScenario(room: BunkerGameRoom | undefined = undefined) {
         try {
-            return await ApiService.getRandomScenario();
+            const eventSet = !!room?.state?.isEventSet;
+            return await ApiService.getRandomScenario(eventSet);
         } catch (error) {
             return undefined;
         }
@@ -56,7 +57,7 @@ export class GameUtils {
     static async initGame(room: BunkerGameRoom) {
         room.state.status = RoomStatus.PLAYING;
         room.updateMetadata();
-        const scenario = await this.loadScenario();
+        const scenario = await this.loadScenario(room);
         room.state.scenario = new SimpleScenario(
             scenario.id,
             scenario.name,

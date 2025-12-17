@@ -71,6 +71,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
             this.state.isPrivateRoom = normalizedOptions.isPrivateRoom;
         }
 
+        if (normalizedOptions.isEventSet !== undefined) {
+            this.state.isEventSet = normalizedOptions.isEventSet;
+        }
+
         if (normalizedOptions.useBots !== undefined) {
             this.state.useBots = normalizedOptions.useBots;
         }
@@ -166,12 +170,14 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         useBots?: boolean;
         playersCount?: number;
         customId?: string;
+        isEventSet?: boolean;
     } {
         const normalized: {
             isPrivateRoom?: boolean;
             useBots?: boolean;
             playersCount?: number;
             customId?: string;
+            isEventSet?: boolean;
         } = {};
 
         if (!options || typeof options !== 'object') {
@@ -186,6 +192,10 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
 
         if (typeof raw.useBots === 'boolean') {
             normalized.useBots = raw.useBots;
+        }
+
+        if (typeof raw.isEventSet === 'boolean') {
+            normalized.isEventSet = raw.isEventSet;
         }
 
         const playersCountCandidate = this.extractNumber(raw.playersCount);

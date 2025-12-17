@@ -70,9 +70,9 @@ export class ApiService {
 
 
   // Получение случайного сценария с сервера
-    async getRandomScenario(): Promise<Scenario> {
+    async getRandomScenario(isEventSet = false): Promise<Scenario> {
         try {
-            const res: AxiosResponse<TEcosystemResponse<TScenarioResponse>, any> = await axios.get(`${this.baseUrl}/api/v1.0/bunker/random-script`, {
+            const res: AxiosResponse<TEcosystemResponse<TScenarioResponse>, any> = await axios.get(`${this.baseUrl}/api/v1.0/bunker/random-script?is_event=${isEventSet?'Y':'N'}`, {
                 headers: {
                     'Authorization': `Bearer ${process.env.API_SECRET}`,
                     'Accept': 'application/json'

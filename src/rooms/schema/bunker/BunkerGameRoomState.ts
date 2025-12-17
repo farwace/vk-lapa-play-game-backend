@@ -21,6 +21,7 @@ export class BunkerGameRoomState extends Schema {
     @type("string") gameStage: GameStage = GameStage.INTRODUCTION;
 
     @type("boolean") isPrivateRoom: boolean = false;
+    @type("boolean") isEventSet: boolean = false;
     @type("number") hostId: number = 0;
 
     @type("string") currentSpeakerId: string = "";
