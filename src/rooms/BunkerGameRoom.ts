@@ -103,6 +103,7 @@ export class BunkerGameRoom extends Room<BunkerGameRoomState> {
         this.onMessage('setLeaderPlayer', this.playerHandler.onSetLeaderPlayer.bind(this.playerHandler));
         this.onMessage('togglePrivateRoom', this.roomHandler.onTogglePrivate.bind(this.roomHandler));
         this.onMessage('toggleUseBotsValue', this.roomHandler.onToggleBots.bind(this.roomHandler));
+        this.onMessage('toggleEventSetsValue', this.roomHandler.onToggleEventSets.bind(this.roomHandler));
         this.onMessage('changePlayersCount', this.roomHandler.onChangePlayersCount.bind(this.roomHandler));
         this.onMessage('ready', this.gameHandler.onReady.bind(this.gameHandler));
 

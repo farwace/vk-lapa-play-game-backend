@@ -22,6 +22,27 @@ export class RoomHandler extends BaseHandler {
         this.room.updateMetadata();
         this.room.botManager.onPrivateStatusChanged(this.room.state.isPrivateRoom);
     }
+
+    onToggleEventSets = (client: Client) => {
+        if(this.room.state.status != RoomStatus.WAITING) {
+            client.send('error', 'Нельзя менять этот параметр во время игры');
+            return;
+        }
+
+        const currentPlayer = this.room.findPlayerByClientSessionId(client.sessionId);
+        if(!currentPlayer){
+            client.send('error', 'Не удалось идентифицировать игрока');
+            return;
+        }
+
+        if(this.room.state.hostId != currentPlayer.id){
+            client.send('error', 'Менять этот параметр может только лидер комнаты!');
+            return;
+        }
+        this.room.state.isEventSet = !this.room.state.isEventSet;
+        this.room.updateMetadata();
+    }
+
     onToggleBots = (client: Client) => {
         if(this.room.state.status != RoomStatus.WAITING) {
             client.send('error', 'Нельзя менять этот параметр во время игры');
